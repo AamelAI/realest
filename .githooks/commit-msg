@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Nudge — never blocks. If a commit closes a task in TODO.md, tag it so the
+# board picks it up. Enabled by `make install` (git config core.hooksPath).
+MSG=$(cat "$1")
+case "$MSG" in
+  Merge*|Revert*|fixup!*|squash!*) exit 0 ;;
+esac
+if ! printf '%s' "$MSG" | grep -qE '\[[0-9]+\.[0-9]+\]'; then
+  printf '\033[33m!\033[0m no task id in this commit message\n'
+  printf '\033[2m  if it closes a TODO.md task, amend with e.g. [1.4] so `make todo` sees it:\033[0m\n'
+  printf '\033[2m    git commit --amend -m "[1.4] %s"\033[0m\n' "$(printf '%s' "$MSG" | head -1)"
+fi
+exit 0
