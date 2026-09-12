@@ -56,7 +56,7 @@ phone ──▶ managed voice agent ──webhooks──▶ FastAPI ──▶ Se
 
 | Layer | Choice |
 |---|---|
-| Voice | **OpenAI Realtime** over Twilio Media Streams. Marquee sponsor, event credits, nothing out of pocket |
+| Voice | **OpenAI Realtime** over Twilio Media Streams — *if* `make keys` shows a realtime model. Codex credits do not authorize the API; fallback in [docs/VOICE_FALLBACK.md](docs/VOICE_FALLBACK.md) |
 | Backend | Python 3.12 · FastAPI · uvicorn |
 | Reasoning | OpenAI Agents SDK + structured outputs |
 | Model fallback | OpenRouter preset |

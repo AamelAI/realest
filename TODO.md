@@ -25,6 +25,7 @@ Nothing else can start until `0.4` rings. If it doesn't by 11:45, take the fallb
 - `0.1` **D1** — ngrok authtoken for the account holding `zipping-scarf-actress.ngrok-free.dev`; `ngrok config add-authtoken <token>` · *done when:* `make tunnel-test` prints OK
 - `0.2` **D1** — Twilio account, buy a 416/647 number with **Voice + SMS** · *done when:* number shows both capabilities
 - `0.3` **D1** — add all three teammate phones to **Verified Caller IDs** · *done when:* all three listed
+- `0.35` **D1** — `make keys` — confirm the OpenAI key reaches the **API**, not just Codex · *done when:* it prints a realtime model, or you've picked a fallback in `docs/VOICE_FALLBACK.md`
 - `0.4` **D1** — `OPENAI_API_KEY` + `TWILIO_*` into `.env`; `make bridge` · `make tunnel` · `make spike TO=…` · *done when:* **your phone rings, the agent speaks, and it stops when you interrupt**
 - `0.5` **D2** — create the **public submission repo**, push access for all three · *done when:* everyone can push
 - `0.6` **D2** — `make install`; `make listings PHONE=… EMAIL=…`; `make seed` · *done when:* `make doctor` green

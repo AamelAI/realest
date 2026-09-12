@@ -33,6 +33,9 @@ deploy:             ## push the page to Vercel (free Hobby tier)
 listings:           ## rebuild listings from the raw scrape: make listings PHONE=+1416... EMAIL=you@x.com
 	uv run python scripts/scrape_rentals.py --phone "$(PHONE)" --email "$(EMAIL)"
 
+keys:               ## what does each API key in .env actually unlock?
+	@uv run python scripts/check_keys.py
+
 bridge:             ## Twilio <-> OpenAI Realtime audio bridge (terminal 1)
 	uv run python scripts/spike_bridge.py
 
