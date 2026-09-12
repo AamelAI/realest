@@ -1,4 +1,4 @@
-.PHONY: dev tunnel web seed check listings preview bridge spike tools install doctor help
+.PHONY: dev tunnel web seed check listings preview bridge spike eleven-spike tools install doctor help
 
 help:
 	@grep -E '^[a-z]+:' Makefile | grep -v '^\.PHONY' | sed 's/:.*//' | sed 's/^/  make /'
@@ -41,6 +41,9 @@ bridge:             ## Twilio <-> OpenAI Realtime audio bridge (terminal 1)
 
 spike:              ## place one test call: make spike TO=+14165551234 [ROLE=renter]
 	uv run python scripts/spike_call.py --to "$(TO)" $(if $(ROLE),--role $(ROLE),)
+
+eleven-spike:       ## ElevenLabs outbound: make eleven-spike TO=+14165551234 [ROLE=renter]
+	uv run python scripts/elevenlabs_spike.py --to "$(TO)" $(if $(ROLE),--role $(ROLE),)
 
 preview:            ## QA page: every listing + link to the real rentals.ca page
 	uv run python scripts/preview.py && open data/preview.html
