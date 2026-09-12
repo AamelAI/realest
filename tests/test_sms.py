@@ -2,7 +2,8 @@
 validation, retries, and duplicate-prevention. No Twilio credentials needed -
 `calls._twilio()` is monkeypatched with a fake client that records sends.
 
-    PYTHONPATH=server python3 tests/test_sms.py
+    uv run pytest tests/test_sms.py -q
+    python3 tests/test_sms.py           # also runs standalone
 """
 from __future__ import annotations
 
@@ -15,13 +16,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 import calls  # noqa: E402
 import state as store  # noqa: E402
 
-ok = True
+_failures: list[str] = []
 
 
 def check(label: str, cond: bool, detail: str = "") -> None:
-    global ok
     print(("  \033[32mPASS\033[0m " if cond else "  \033[31mFAIL\033[0m ") + label + (f"  {detail}" if detail else ""))
-    ok = ok and cond
+    if not cond:
+        _failures.append(label)
 
 
 class FakeMessages:
@@ -60,7 +61,7 @@ async def new_session(sid: str, phone: str = "+14165551234"):
     await store.mutate(sid, lambda s: setattr(s, "caller_phone", phone))
 
 
-async def run() -> None:
+async def _run() -> None:
     # ── basic send + validation ──────────────────────────────────────────
     print("\nsms() - basic send")
     reset_sms_module_state()
@@ -166,6 +167,12 @@ async def run() -> None:
     calls.SMS_LINK_DELAY_S = 5  # restore the real constant for anything after this module
 
 
-asyncio.run(run())
-print("\n\033[32mall SMS checks pass\033[0m\n" if ok else "\n\033[31mSMS CHECKS FAILING\033[0m\n")
-raise SystemExit(0 if ok else 1)
+def test_sms_behavior() -> None:
+    _failures.clear()
+    asyncio.run(_run())
+    assert not _failures, f"{len(_failures)} check(s) failed: {_failures}"
+
+
+if __name__ == "__main__":
+    test_sms_behavior()
+    print("\n\033[32mall SMS checks pass\033[0m\n")

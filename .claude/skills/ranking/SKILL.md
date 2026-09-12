@@ -37,6 +37,8 @@ Runs on two triggers: a preference change, and a call outcome landing. Nowhere e
 4. **Then weighted preference fit**, using the weights the caller stated *most recently*.
 5. **Hard conflicts annotate, they don't remove.** Dog vs cats-only stays on the list with a flag. The caller decides, not us.
 
+**Neighbourhoods are fuzzy on purpose.** Exact area match scores **30**, a walkable neighbour **14**, anywhere else **−30** (`NEARBY` in `server/listings.py`). A caller who says "King West" means "or near enough that I'd still go and see it" — strict matching returns an empty shortlist, which is worse than a Liberty Village unit one streetcar stop away. Exact hits always outrank neighbours, and the card shows the real neighbourhood, so nothing is hidden.
+
 Rule 5 is the controllability story. Never silently drop a listing because the agent thinks it's wrong for them.
 
 ## Recency-weighted preferences
