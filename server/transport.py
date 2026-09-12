@@ -29,35 +29,37 @@ import listings as L
 # that reads as "these are separate phone calls" on camera.
 DELAY_RANGE = (6.0, 11.0)
 
-# id -> what the listing agent says. Straight from docs/DEMO.md.
+# id -> what the listing agent says. Straight from docs/DEMO.md - these MUST
+# stay in sync with that file's four canonical demo listings (see
+# tests/test_demo_scripts.py, which fails loudly the moment they drift again).
 # None means nobody picks up.
 SCRIPTS: dict[str, str | None] = {
-    # DEAD - the top pick, leased days ago, listing never pulled down
-    "L013": (
-        "Agent: Hi, Dana speaking.\n"
-        "AI: Hi, I'm an AI assistant calling on behalf of a client about 370 Queens "
-        "Quay West. Is that one still available?\n"
+    # DEAD - opens at #1, "leased Tuesday", ends at #4
+    "L092": (
+        "Agent: Hi, this is the leasing office for 155 Yorkville Avenue.\n"
+        "AI: Hi, I'm an AI assistant calling on behalf of a client about 155 "
+        "Yorkville Avenue. Is that one still available?\n"
         "Agent: Oh - no, sorry, that one's gone. We leased it Tuesday. I keep meaning "
         "to pull the listing down.\n"
         "AI: Understood, thanks very much for your time.\n"
         "Agent: No problem."
     ),
-    # PRICE WRONG - parking is an add-on, which puts it over budget
-    "L054": (
-        "Agent: 57 Spadina, this is Mark.\n"
-        "AI: Hi, I'm an AI assistant calling for a client about the one bedroom at "
-        "57 Spadina. Is it still available, and is parking included in the rent?\n"
+    # PRICE WRONG - parking is a $180 add-on, $3,290 -> $3,470, over the $3,400 cap
+    "L095": (
+        "Agent: 322 Dupont, this is Mark.\n"
+        "AI: Hi, I'm an AI assistant calling for a client about the unit at "
+        "322 Dupont Street. Is it still available, and is parking included in the rent?\n"
         "Agent: It's available, yes. Parking's separate though - that's a hundred and "
         "eighty a month on top.\n"
         "AI: Good to know. Any locker with it?\n"
         "Agent: Lockers are all spoken for in that building right now.\n"
         "AI: Thanks Mark, that's really helpful."
     ),
-    # BOOKED - available, locker included, but cats only and the caller has a dog
-    "L061": (
-        "Agent: Ordnance Street, Priya here.\n"
-        "AI: Hi, I'm an AI assistant calling for a client about the one bedroom at "
-        "25 Ordnance Street. Still available?\n"
+    # BOOKED - available, Saturday 2pm, but cats only and the caller has a dog
+    "L086": (
+        "Agent: 155 Yorkville Avenue, Priya speaking.\n"
+        "AI: Hi, I'm an AI assistant calling for a client about the unit at "
+        "155 Yorkville Avenue. Still available?\n"
         "Agent: It is, yes.\n"
         "AI: Is parking extra, and is there a locker?\n"
         "Agent: Parking's included, and there's a locker with that unit too.\n"
@@ -68,7 +70,7 @@ SCRIPTS: dict[str, str | None] = {
         "AI: Perfect, let's hold two o'clock Saturday. Thank you."
     ),
     # NO ANSWER - drafts an email instead
-    "L063": None,
+    "L100": None,
 }
 
 GENERIC = (
