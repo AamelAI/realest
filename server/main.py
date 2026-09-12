@@ -140,21 +140,46 @@ def _nested_get(payload: dict, *keys: str) -> str:
     return ""
 
 
+def _apply_caller(payload: dict) -> str:
+    phone = _nested_get(payload, "caller_phone", "From", "from_number",
+                        "from", "caller_id", "caller",
+                        "user_id", "system__caller_id")
+    return phone if phone and calls.E164.match(phone) else ""
+
+
+def _session_for_caller(phone: str) -> str:
+    """Reuse the inbound session minted at pickup when a tool omits session_id."""
+    if not phone:
+        return ""
+    best, best_t = "", -1.0
+    for sid in store.all_ids():
+        s = store.get(sid)
+        if s and s.caller_phone == phone and s.updated_at >= best_t:
+            best, best_t = sid, s.updated_at
+    return best
+
+
 def _ensure_session(payload: dict) -> str:
     """Stable session id for webhook tools. Never invent listing facts here."""
     sid = _nested_get(payload, "session_id")
     if not sid:
         sid = _nested_get(payload, "conversation_id")
     if not sid:
+        sid = _session_for_caller(_apply_caller(payload))
+    if not sid:
         sid = secrets.token_urlsafe(6)
         log.info("session minted %s", sid)
     return sid
 
 
-def _apply_caller(payload: dict) -> str:
-    phone = _nested_get(payload, "caller_phone", "From", "from_number",
-                        "user_id", "system__caller_id")
-    return phone if phone and calls.E164.match(phone) else ""
+async def _sms_link_once(sid: str, link: str) -> bool:
+    """One shortlist text per session. Safe to call from init, prefs, or send_sms."""
+    if sid in _linked:
+        return True
+    sent = await calls.sms(sid, f"Your shortlist: {link}")
+    if sent:
+        _linked.add(sid)
+    return sent
 
 
 def _as_list(val) -> list[str]:
@@ -179,10 +204,7 @@ async def agent_init(payload: dict):
     shortlist SMS has to go.
     """
     sid = secrets.token_urlsafe(6)
-    caller = _nested_get(payload, "caller_id", "from_number", "from", "caller",
-                         "caller_phone", "user_id", "system__caller_id")
-    if caller and not calls.E164.match(caller):
-        caller = ""
+    caller = _apply_caller(payload)
     called = _nested_get(payload, "called_number", "to_number", "agent_number")
 
     def write(s):
@@ -190,7 +212,12 @@ async def agent_init(payload: dict):
             s.caller_phone = caller
 
     await store.mutate(sid, write)
+    link = f"{WEB_URL}/s/{sid}"
     log.info("inbound session %s · caller=%s · called=%s", sid, caller or "?", called or "?")
+    # Background: this webhook must return before the greeting. A Twilio hop
+    # here would stall pickup; sms() never raises.
+    if caller:
+        asyncio.create_task(_sms_link_once(sid, link))
 
     # ElevenLabs merges these into the agent's dynamic variables for the call.
     return {
@@ -198,7 +225,7 @@ async def agent_init(payload: dict):
         "dynamic_variables": {
             "session_id": sid,
             "caller_phone": caller,
-            "shortlist_url": f"{WEB_URL}/s/{sid}",
+            "shortlist_url": link,
         },
     }
 
@@ -229,13 +256,10 @@ async def agent_preferences(payload: dict):
               if n else "Nothing matches that yet. Want to widen the budget or the area?")
     await store.mutate(sid, lambda s_: setattr(s_, "agent_says", spoken))
 
-    # "I've texted you a link" has to be true. Fire once per session: a caller
-    # who reprioritises three times should not get three texts. sms() validates
-    # the destination, de-dupes and never raises, so a missing caller_phone
-    # just means no text - it never breaks the call.
-    if n and sid not in _linked:
-        _linked.add(sid)
-        await calls.sms(sid, f"Your shortlist: {WEB_URL}/s/{sid}")
+    # Backup if pickup SMS has not gone out yet (no caller_id on init, or
+    # the initiation webhook is off). Once per session.
+    if n:
+        await _sms_link_once(sid, f"{WEB_URL}/s/{sid}")
     # The model needs the ids to pass back to start_calls. They are never
     # spoken - `speak` is the only field that reaches the caller's ear - but
     # without them the model invents labels like "Listing 2" and nothing matches.
@@ -390,7 +414,7 @@ async def agent_sms(payload: dict):
             s.caller_phone = phone
 
     await store.mutate(sid, write)
-    sent = await calls.sms(sid, f"Your shortlist: {link}")
+    sent = await _sms_link_once(sid, link)
     spoken = ("I've texted you the link. Have a look while we talk."
               if sent else
               "I couldn't text that number. What's a good mobile, with country code?")

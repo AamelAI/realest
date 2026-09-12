@@ -93,7 +93,7 @@
     {
       "type": "webhook",
       "name": "send_sms",
-      "description": "Text the caller the shortlist link. Call this after record_preferences, or when they ask for the link. Read the speak field aloud. If sent is false, ask for a mobile with country code and call again.",
+      "description": "Text the caller the shortlist link. Call this immediately at the start of the inbound call, before waiting for preferences, and again if they ask for the link or say they did not get it. Read the speak field aloud. If sent is false, ask for a mobile with country code and call again.",
       "api_schema": {
         "url": "{PUBLIC_URL}/agent/sms",
         "method": "POST",
