@@ -64,14 +64,37 @@ def within_business_hours(now: datetime | None = None) -> bool:
 
 
 async def place_call(session_id: str, listing_id: str, extra_questions: list[str]) -> str:
-    """One POST. Returns the Twilio call sid.
+    """Place one outbound listing-agent call. Returns a provider call id.
 
-    session_id and listing_id ride the TwiML query string; they come back on the
-    websocket and are how we know which card an outcome belongs to.
+    VOICE_PROVIDER=elevenlabs → one POST to ConvAI (dynamic vars carry session
+    and listing). Otherwise Twilio Media Streams + /twiml/listing.
     """
     lst = L.by_id(listing_id)
+    if lst is None:
+        raise RuntimeError(f"listing {listing_id} not found")
+
+    import voice
+    if voice.is_elevenlabs():
+        handle = await voice.get_provider().place_outbound(
+            to_number=lst.agent_phone,
+            role="listing",
+            dynamic_variables={
+                "session_id": session_id,
+                "listing_id": listing_id,
+                "address": lst.address,
+                "listed_rent": str(lst.rent),
+                "agent_name": lst.agent_name or "",
+                "extra_questions": ", ".join(extra_questions),
+            },
+        )
+        cid = handle.call_sid or handle.conversation_id or ""
+        log.info("place_call[%s]: elevenlabs %s → %s conv=%s sid=%s",
+                 session_id, listing_id, lst.agent_phone,
+                 handle.conversation_id, handle.call_sid)
+        return cid
+
     client, public = _twilio(), os.getenv("PUBLIC_URL", "").rstrip("/")
-    if lst is None or client is None or not public:
+    if client is None or not public:
         raise RuntimeError("twilio or listing not configured")
 
     q = f"session={session_id}&listing={listing_id}"
