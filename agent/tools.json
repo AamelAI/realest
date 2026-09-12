@@ -1,6 +1,6 @@
 {
   "_note": "OpenAI Realtime function tools. Sent in session.update when a call's websocket opens (see scripts/spike_bridge.py). The model emits response.function_call_arguments.done; the bridge calls the matching Python function IN-PROCESS and replies with conversation.item.create / function_call_output. No HTTP webhooks, no dashboard, no URLs to rewrite.",
-  "_renter_agent": ["record_preferences", "start_calls", "book_viewing"],
+  "_renter_agent": ["record_preferences", "start_calls", "book_viewing", "send_sms"],
   "_listing_agent": ["record_outcome"],
   "tools": [
     {
@@ -32,6 +32,18 @@
           "extra_questions": { "type": "array", "items": { "type": "string" }, "description": "Anything extra the caller asked us to find out." }
         },
         "required": ["listing_ids"]
+      }
+    },
+    {
+      "type": "function",
+      "name": "send_sms",
+      "description": "Text the caller the shortlist link. Call this immediately at the start of the inbound call, before waiting for preferences, and again if they ask for the link or say they did not get it.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "caller_phone": { "type": "string", "description": "Caller's mobile in E.164, e.g. +14165551234. Omit if already known." }
+        },
+        "required": []
       }
     },
     {
