@@ -1,0 +1,44 @@
+[
+  {
+    "listing_id": "L001",
+    "address": "155 Strachan Ave",
+    "rent": 3180,
+    "beds": 2,
+    "baths": 1,
+    "parking_included": true,
+    "pets": "ask",
+    "amenities": ["gym", "roof deck"],
+    "transit_note": "4 min to King streetcar",
+    "photo_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=640",
+    "agent_name": "Mark",
+    "agent_phone": "+1416REPLACE"
+  },
+  {
+    "listing_id": "L002",
+    "address": "700 Wellington St W",
+    "rent": 3250,
+    "beds": 2,
+    "baths": 2,
+    "parking_included": true,
+    "pets": "ask",
+    "amenities": ["concierge"],
+    "transit_note": "8 min to King streetcar",
+    "photo_url": "https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=640",
+    "agent_name": "Dana",
+    "agent_phone": "+1416REPLACE"
+  },
+  {
+    "listing_id": "L003",
+    "address": "80 Lynn Williams St",
+    "rent": 3295,
+    "beds": 2,
+    "baths": 2,
+    "parking_included": true,
+    "pets": "cats only",
+    "amenities": ["locker", "gym"],
+    "transit_note": "3 min to Exhibition GO",
+    "photo_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=640",
+    "agent_name": "Priya",
+    "agent_phone": "+1416REPLACE"
+  }
+]
