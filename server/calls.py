@@ -203,6 +203,13 @@ async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list
                 })
                 return lid
             # TRANSPORT=voice: real outbound on the Listing agent.
+            # place_call() branches internally on voice.is_elevenlabs(): the
+            # ElevenLabs leg fires the outbound call and schedules
+            # watch_listing_call() as a background task, then returns
+            # immediately - the outcome arrives later via that task or the
+            # record_outcome webhook, not from this await. The Twilio leg is
+            # unchanged. Either way, this call must stay fast so the card
+            # flips to CALLING and doesn't spin.
             return await asyncio.wait_for(
                 place_call(session_id, lid, extra_questions), timeout=CALL_TIMEOUT
             )
