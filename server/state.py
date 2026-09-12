@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import Callable
 
 from schemas import SessionState
 
@@ -21,12 +22,21 @@ def get(session_id: str) -> SessionState | None:
     return _sessions.get(session_id)
 
 
-async def mutate(session_id: str, fn) -> SessionState:
+def all_ids() -> list[str]:
+    return list(_sessions)
+
+
+async def mutate(session_id: str, fn: Callable[[SessionState], None]) -> SessionState:
     """Funnel EVERY write through here.
 
     Three calls land concurrently; two coroutines writing `listings` at the
     same time is a real bug in this project, not a theoretical one.
-
-    TODO(hackathon): create-if-missing, apply fn, bump updated_at, return state.
     """
-    raise NotImplementedError
+    async with _lock:
+        state = _sessions.get(session_id)
+        if state is None:
+            state = SessionState(session_id=session_id)
+            _sessions[session_id] = state
+        fn(state)
+        state.updated_at = time.time()
+        return state

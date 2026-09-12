@@ -21,8 +21,31 @@ export function Board({
   const state = live ? polled : initial;
 
   const [selected, setSelected] = useState<string[]>([]);
+  const [sending, setSending] = useState(false);
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  // The approval gate. Voice asked "anything else you want me to ask?"; this is
+  // where the caller says which ones. Clear selection immediately so the cards
+  // flipping to "calling" are the only feedback that matters.
+  async function startCalls() {
+    if (!selected.length || sending) return;
+    setSending(true);
+    const ids = selected;
+    setSelected([]);
+    try {
+      await fetch("/api/call", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session_id: sid, listing_ids: ids }),
+      });
+    } catch {
+      // The voice loop is the source of truth; a failed tap is never fatal.
+      setSelected(ids);
+    } finally {
+      setSending(false);
+    }
+  }
 
   const calling = state.listings.filter((l) => l.status === "calling").length;
   const p = state.preferences;
@@ -109,10 +132,13 @@ export function Board({
               </p>
               <button
                 type="button"
-                // TODO(hackathon): POST selected ids to /agent/start-calls
-                className="shrink-0 bg-ink px-5 py-2.5 text-[14px] font-semibold text-paper transition-opacity hover:opacity-80 active:opacity-65"
+                onClick={startCalls}
+                disabled={sending}
+                className="shrink-0 bg-ink px-5 py-2.5 text-[14px] font-semibold text-paper transition-opacity hover:opacity-80 active:opacity-65 disabled:opacity-40"
               >
-                Call {selected.length === 1 ? "them" : `all ${selected.length}`}
+                {sending
+                  ? "Dialling…"
+                  : `Call ${selected.length === 1 ? "them" : `all ${selected.length}`}`}
               </button>
             </div>
           </motion.div>
