@@ -12,6 +12,7 @@ from datetime import datetime
 from openai import AsyncOpenAI
 
 import listings as L
+import transport
 import state as store
 from schemas import CallOutcome, CallStatus
 
@@ -33,8 +34,13 @@ def _twilio():
 
 
 def _openai() -> AsyncOpenAI | None:
-    key = os.getenv("OPENAI_API_KEY")
-    return AsyncOpenAI(api_key=key) if key else None
+    """Whichever provider has a key. Shared with server/chat.py so extraction
+    works on OpenAI, OpenRouter or Gemini without a second code path."""
+    import chat
+    try:
+        return chat._client()[0]
+    except RuntimeError:
+        return None
 
 
 def within_business_hours(now: datetime | None = None) -> bool:
@@ -76,6 +82,23 @@ async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list
 
     async def one(lid: str):
         try:
+            if transport.is_stub():
+                # A scripted listing agent answers. The transcript still goes
+                # through the real extract_outcome() and the real re-rank -
+                # only the dial tone is fake.
+                transcript = await asyncio.wait_for(
+                    transport.stub_call(lid, extra_questions), timeout=CALL_TIMEOUT
+                )
+                if transcript is None:
+                    await mark_no_answer(session_id, lid, extra_questions)
+                    return None
+                oc = await extract_outcome(transcript, extra_questions)
+                import main
+                await main.agent_outcome({
+                    "session_id": session_id, "listing_id": lid,
+                    **oc.model_dump(mode="json"),
+                })
+                return lid
             return await asyncio.wait_for(
                 place_call(session_id, lid, extra_questions), timeout=CALL_TIMEOUT
             )
@@ -92,7 +115,8 @@ async def mark_no_answer(session_id: str, listing_id: str, extra_questions: list
 
     def write(s):
         for st in s.listings:
-            if st.listing_id == listing_id and st.status is CallStatus.CALLING:
+            if st.listing_id == listing_id and st.status in (
+                    CallStatus.CALLING, CallStatus.PENDING):
                 st.status = CallStatus.NO_ANSWER
                 st.email_draft = draft
 
@@ -110,19 +134,24 @@ async def extract_outcome(transcript: str, extra_questions: list[str]) -> CallOu
         return CallOutcome(raw_transcript=transcript)
 
     asked = "; ".join(extra_questions) or "none"
-    r = await client.responses.parse(
-        model="gpt-4.1-mini",
-        input=[
+    import chat as _chat
+    _, model = _chat._client()
+    r = await client.chat.completions.parse(
+        model=model,
+        messages=[
             {"role": "system", "content":
              "Extract ONLY what the listing agent actually said in this phone call. "
-             "If they did not mention something, leave it null or empty - never guess. "
+             "If they did not mention something, leave it null - never guess. "
+             "If they said the unit is gone or already leased, set available=false. "
+             "real_rent = the listed rent PLUS every mandatory add-on they named. "
+             "addons = each extra cost as a short phrase, e.g. 'parking $180'. "
              f"The caller also asked us to find out: {asked}. "
              "Set `source` to who said it and when, e.g. 'Mark, 1:42pm'."},
             {"role": "user", "content": transcript},
         ],
-        text_format=CallOutcome,
+        response_format=CallOutcome,
     )
-    oc = r.output_parsed or CallOutcome()
+    oc = r.choices[0].message.parsed or CallOutcome()
     oc.raw_transcript = transcript
     if not oc.source:
         oc.source = datetime.now().strftime("agent, %-I:%M%p").lower()

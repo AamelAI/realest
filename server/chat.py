@@ -71,6 +71,22 @@ def _tools() -> list[dict]:
     ]
 
 
+def _board(session_id: str) -> str:
+    """Compact shortlist for the model's eyes only. Never spoken."""
+    s = store.get(session_id)
+    if not s or not s.listings:
+        return ""
+    import listings as L
+    rows = []
+    for st in s.listings:
+        lst = L.by_id(st.listing_id)
+        addr = lst.address if lst else ""
+        rows.append(f"{st.listing_id}={addr} [{st.status.value}]")
+    return ("\n\n(current shortlist, for your reference only - never read ids "
+            "aloud; pass them to start_calls and book_viewing: "
+            + "; ".join(rows) + ")")
+
+
 async def turn(session_id: str, message: str) -> str:
     """One user message in, one assistant reply out. Tools fire in between."""
     client, model = _client()
@@ -98,7 +114,12 @@ async def turn(session_id: str, message: str) -> str:
                 args = {}
             # Exactly the call the voice bridge makes.
             out = await dispatch(tc.function.name, args, session_id)
-            msgs.append({"role": "tool", "tool_call_id": tc.id, "content": out})
+            # dispatch() returns only the line to SPEAK. A voice caller hears
+            # addresses and that's enough, but a model needs the ids to pass
+            # back to start_calls - without them it echoes one address and only
+            # one listing gets called. Append the board as context, not speech.
+            msgs.append({"role": "tool", "tool_call_id": tc.id,
+                         "content": out + _board(session_id)})
     else:
         reply = "Sorry, I got tangled up there. Say that again?"
 
