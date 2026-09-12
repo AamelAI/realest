@@ -62,7 +62,17 @@ def main() -> int:
         handle = asyncio.run(provider.place_outbound(
             to_number=args.to,
             role=args.role,
-            dynamic_variables={"spike": "1", "role": args.role},
+            dynamic_variables={
+                "spike": "1",
+                "role": args.role,
+                "session_id": "spike",
+                "listing_id": "SPIKE",
+                "address": "700 Wellington St W (spike)",
+                "listing_address": "700 Wellington St W (spike)",
+                "listed_rent": "2800",
+                "agent_name": "Dana",
+                "extra_questions": "",
+            },
         ))
     except ElevenLabsError as exc:
         print(f"{R}✗{X} {exc}")
