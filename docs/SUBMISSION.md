@@ -109,3 +109,29 @@ of this draft.
 - Re-verify the "What's verified" section against `make todo` right before
   submitting — if Step 4 (voice) lands, this whole section should be
   rewritten to lead with the live call, not the stub.
+
+---
+
+## Final submission checklist (`7.1`–`7.5`)
+
+Status as of the last `make todo` run. Nobody should have to reconstruct
+this from `.claude/skills/submit/` under time pressure at 15:00 — check
+these five off in order, don't submit until all five are real.
+
+| # | Item | Task | Owner | Status |
+|---|---|---|---|---|
+| 1 | Project title | — | — | ✅ Done — **Realest**, no work needed |
+| 2 | Written description | `7.1` (README) + `7.3` (description) | D1 (README) / D2 (description, me) | 🟡 Draft above is honest for *today's* verified state, but explicitly written to be rewritten once voice lands (`4.1`–`4.3`) — don't submit the draft unedited |
+| 3 | Public GitHub repo URL | `0.5` (push `base` → `AamelAI/realest`) + `7.4` (verify public, loads signed out) | D1 / D4 | 🔴 Not started — `0.5` still shows `○` on the board. **This blocks literally everything else** — the submission form needs this URL |
+| 4 | Two-minute demo video | `7.2` | D3 | 🔴 Not started — needs `7.1`'s README beats and either real voice or an agreed text-path fallback shot |
+| 5 | Social post (tag OpenAI, Georgian, CopilotKit, OpenRouter, AI Tinkerers, Human Feedback Foundation) | `7.3` | D2 (me) | 🟡 Draft above, all six tagged — same caveat as #2, and **not posted externally yet** |
+
+**Repo hygiene** (`.claude/skills/submit/`'s own checklist) — run and clean as of this check:
+- ✅ Commit history is real and dated today
+- ✅ No leaked secrets found (working tree and full git history)
+- ✅ `.env` gitignored, never committed; `.env.example` committed and current
+- ✅ No absolute laptop paths in tracked files
+- ✅ README's setup commands (`make install/seed/dev/tunnel/web/doctor`) all exist in the Makefile
+- ⬜ "Repo is public" — can't check from here; verify as part of `7.4`, on `AamelAI/realest`, not this private `base` repo
+
+**The one thing to escalate now, not at 15:00:** `0.5` (push `base` → `AamelAI/realest`) has no owner activity yet and every other submission item depends on that URL existing. Worth a direct nudge to D1.
