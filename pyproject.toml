@@ -1,0 +1,25 @@
+[project]
+name = "realest"
+version = "0.1.0"
+description = "The renter's agent. It makes the calls instead of receiving them."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "python-dotenv>=1.0",
+    "httpx>=0.27",
+    "twilio>=9.3",
+    # Intel Mac: cryptography>=47 ships no macOS x86_64 wheel and falls back to a
+    # Rust source build that fails on older toolchains. Pulled in via twilio->pyjwt.
+    "cryptography<47",
+    "openai>=1.54",
+    "openai-agents>=0.14",
+    "exa-py>=1.7",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[tool.pytest.ini_options]
+pythonpath = ["server"]
