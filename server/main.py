@@ -40,6 +40,9 @@ app.add_middleware(
 # dropping the other calls' results. Serialise apply+rerank.
 _outcome_lock = asyncio.Lock()
 
+# sessions that have already been sent their shortlist link
+_linked: set[str] = set()
+
 WEB_URL = os.getenv("WEB_URL", "http://localhost:3000").rstrip("/")
 SHORTLIST_SIZE = 4
 
@@ -163,6 +166,43 @@ def _as_list(val) -> list[str]:
     return [p.strip() for p in str(val).split(",") if p.strip()]
 
 
+@app.post("/agent/init")
+async def agent_init(payload: dict):
+    """ElevenLabs calls this the moment an INBOUND call connects.
+
+    An inbound call arrives cold - no client data - so {{session_id}} is empty
+    and every webhook tool would otherwise mint its own session: preferences
+    land in one, start_calls in another, and the page watches a third. We mint
+    one here and hand it back as a dynamic variable for the whole call.
+
+    It is also the only place we learn the caller's number, which is where the
+    shortlist SMS has to go.
+    """
+    sid = secrets.token_urlsafe(6)
+    caller = _nested_get(payload, "caller_id", "from_number", "from", "caller",
+                         "caller_phone", "user_id", "system__caller_id")
+    if caller and not calls.E164.match(caller):
+        caller = ""
+    called = _nested_get(payload, "called_number", "to_number", "agent_number")
+
+    def write(s):
+        if caller:
+            s.caller_phone = caller
+
+    await store.mutate(sid, write)
+    log.info("inbound session %s · caller=%s · called=%s", sid, caller or "?", called or "?")
+
+    # ElevenLabs merges these into the agent's dynamic variables for the call.
+    return {
+        "type": "conversation_initiation_client_data",
+        "dynamic_variables": {
+            "session_id": sid,
+            "caller_phone": caller,
+            "shortlist_url": f"{WEB_URL}/s/{sid}",
+        },
+    }
+
+
 @app.post("/agent/preferences")
 async def agent_preferences(payload: dict):
     """Caller described what they want, or reprioritized. Re-rank, speak one line."""
@@ -188,6 +228,14 @@ async def agent_preferences(payload: dict):
     spoken = (f"{n} fit. I've texted you a link - {top} is on top. Have a look while we talk."
               if n else "Nothing matches that yet. Want to widen the budget or the area?")
     await store.mutate(sid, lambda s_: setattr(s_, "agent_says", spoken))
+
+    # "I've texted you a link" has to be true. Fire once per session: a caller
+    # who reprioritises three times should not get three texts. sms() validates
+    # the destination, de-dupes and never raises, so a missing caller_phone
+    # just means no text - it never breaks the call.
+    if n and sid not in _linked:
+        _linked.add(sid)
+        await calls.sms(sid, f"Your shortlist: {WEB_URL}/s/{sid}")
     # The model needs the ids to pass back to start_calls. They are never
     # spoken - `speak` is the only field that reaches the caller's ear - but
     # without them the model invents labels like "Listing 2" and nothing matches.
