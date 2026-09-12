@@ -8,10 +8,10 @@ One session store. Two channels. No audio code.
 
 ```
                          ┌──────────────────────────┐
-   caller's phone ──────▶│  managed voice agent     │
-        (inbound)        │  (ElevenLabs ConvAI/Vapi)│
+   caller's phone ──────▶│  Twilio Media Streams    │
+        (inbound)        │    ⇅ OpenAI Realtime     │
                          └────────────┬─────────────┘
-                                      │ webhook tools
+                                      │ function tools (in-process)
                                       ▼
   ┌───────────────────────────────────────────────────────────┐
   │                    FastAPI  (server/)                     │
@@ -114,13 +114,15 @@ class SessionState(BaseModel):
 
 ---
 
-## Why webhook tools, not a custom audio pipeline
+## Why OpenAI Realtime, and why the bridge is already written
 
-The voice agent's tools are declared as HTTP webhooks pointing at our FastAPI. The provider handles every hard part of telephony — audio format, barge-in, interruption, turn-taking — and calls us with structured arguments when the conversation needs something.
+Calls run on the **OpenAI Realtime API** with **Twilio Media Streams** proxying audio both ways. Marquee sponsor, event credits, no third-party voice vendor, nothing out of pocket.
 
-SITE COBRA's entire telephony layer was 182 lines and one POST. Ours should be similar. See `.claude/skills/voice-calls/` for the exact patterns and `agent/tools.json` for the tool definitions.
+The cost of that choice is audio plumbing — μ-law format, barge-in, `streamSid` — which is why `scripts/spike_bridge.py` was written and proven *before* the event. Build on it; don't rewrite it, and don't debug it during the build.
 
-**Consequence:** all our logic is ordinary HTTP handlers we can test with `curl`, with no phone involved. Use that — you can build and test 90% of this project without dialling anything.
+Tools are **in-process function calls**, not HTTP webhooks: the model emits `response.function_call_arguments.done`, the bridge calls the matching Python function directly and replies with a `function_call_output` that gets spoken aloud. No dashboard, no URLs to keep in sync.
+
+**Consequence:** the state-mutating logic is still ordinary functions you can call from a test or a `curl` against `/agent/*`, with no phone involved. Use that — you can build and verify most of this project without dialling anything.
 
 ---
 
@@ -164,5 +166,5 @@ Named explicitly in the rubric's top band, and cheap.
 |---|---|---|
 | FastAPI | laptop behind ngrok | needs a long-running process; don't deploy to anything that scales to zero |
 | Next.js page | Vercel | the SMS link must be a real public URL |
-| Voice agent config | provider dashboard | prompt + tools, changeable without redeploy |
+| Voice agents | `scripts/spike_bridge.py` | prompts in code, tools from `agent/tools.json`, sent in `session.update` |
 | Listings | `data/listings.json` → SQLite | seeded before the event |

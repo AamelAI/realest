@@ -1,90 +1,98 @@
-# Voice spike — the 20-minute runbook
+# Voice spike — the runbook
 
-The only irreversible risk left. Do this before sleeping, not in the morning.
+**Everything here is free.** OpenAI is the marquee sponsor and supplies builder credits; Twilio's trial credit covers a number and far more test calls than you'll make; ngrok gives every account one static domain on the free plan. No third-party voice vendor, nothing out of pocket.
 
-**Success is one thing:** your own phone rings and an agent talks to you. Until that happens, nothing else in the telephony lane matters.
+The trade for that is ~80 lines of audio proxying, already written in `scripts/spike_bridge.py`. You pay it once, tonight, and never again.
 
-If it fails, you find out now — while there's still time to pivot to browser-mic input and keep the outbound leg, which is the half that actually wins. Finding out at 11:30 with three people watching is how a project dies.
-
----
-
-## 1 · Twilio — number and verified phones · ~8 min
-
-1. Sign up at [twilio.com](https://www.twilio.com/try-twilio), verify your own phone.
-2. **Phone Numbers → Buy a number.** Filter **Canada**, area code **416** or **647**. Require **Voice** *and* **SMS** capability. A Toronto number calling Toronto listing agents looks right on camera.
-3. **This is the step people miss:** a Twilio trial can only call *verified* numbers. Go to **Phone Numbers → Verified Caller IDs** and add all three teammate phones — every `agent_phone` in `data/listings.json` is one of them. Either verify them, or add ~$20 and upgrade out of trial.
-4. Copy `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` into `.env`.
-
-> **Failure here looks like:** call placed successfully, phone never rings. That's an unverified destination nine times out of ten.
+**Success is one thing:** your own phone rings, an agent talks, and it stops when you interrupt. Until that happens, nothing else in the telephony lane matters.
 
 ---
 
-## 2 · Voice provider — two agents · ~8 min
-
-Any managed conversational-telephony provider works — ElevenLabs ConvAI, Vapi, Retell. The shape is identical: one POST with an agent id, a phone-number id and a destination. `scripts/spike_call.py` is written against ElevenLabs; swap the URL and payload keys for the others.
-
-1. Create the account, grab the API key → `VOICE_API_KEY`.
-2. **Import the Twilio number** on the provider side (it'll ask for the SID and auth token). Note the provider's own id for it → `VOICE_PHONE_NUMBER_ID`.
-3. Create the **renter agent** → `VOICE_RENTER_AGENT_ID`. First line:
-
-   > "Hi — I'm an AI assistant that finds rentals in Toronto and calls the listing agents for you. What are you after?"
-
-4. Create the **listing agent** → `VOICE_LISTING_AGENT_ID`. It must identify itself as an AI in its first sentence — that's both the right thing and criterion-4 evidence:
-
-   > "Hi, I'm an AI assistant calling on behalf of a client about the {{listing_address}} listing. Is it still available, and what does parking actually cost?"
-
-Two agents, because they face opposite directions and want opposite prompts. Don't try to make one do both.
-
----
-
-## 3 · Ring your own phone · ~2 min
+## 1 · ngrok — free static domain · 2 min
 
 ```bash
-make spike TO=+1416XXXXXXX
+ngrok config add-authtoken <token>
+```
+
+Claim your free static domain in the dashboard (**Domains → New Domain**). Every account gets one, and it's the whole point — Twilio and OpenAI both need a URL that survives a restart.
+
+Put it in `.env` as `PUBLIC_URL=https://<your>.ngrok-free.app`, then:
+
+```bash
+make tunnel
+```
+
+---
+
+## 2 · Twilio — number and verified phones · 8 min
+
+1. Sign up at [twilio.com](https://www.twilio.com/try-twilio). The trial credit covers everything below.
+2. **Phone Numbers → Buy a number.** Filter **Canada**, area code **416** or **647**, require **Voice** *and* **SMS**. A Toronto number calling Toronto listing agents looks right on camera.
+3. **The step people miss:** a trial account can only call *verified* numbers. **Phone Numbers → Verified Caller IDs** → add all three teammate phones. Every `agent_phone` in your listings is one of them.
+4. `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` into `.env`.
+
+> **Failure here looks like:** call reports success, phone never rings. That's an unverified destination nine times out of ten — `spike_call.py` catches error `21219` and tells you.
+
+---
+
+## 3 · OpenAI · 1 min
+
+`OPENAI_API_KEY` into `.env`. That's it — no agent to create, no number to import. The prompt lives in `spike_bridge.py` and you edit it in a text editor, not a dashboard.
+
+Grab event credits at the 10:30 briefing if they're offered.
+
+---
+
+## 4 · Ring your own phone · 3 min
+
+Three terminals:
+
+```bash
+make bridge                  # 1 — Twilio <-> OpenAI audio proxy
+make tunnel                  # 2 — ngrok
+make spike TO=+1416XXXXXXX   # 3 — place the call
 ```
 
 You want:
 
 ```
-✓ call placed
-  conversation  conv_abc123…
-  call sid      CA…
+  bridge ok · model gpt-realtime
+✓ call placed · sid CA… · listing voice
 ```
 
-…and then your phone ringing.
+…then your phone rings and the agent **speaks first**.
 
-The script maps the common failures for you: `401/403` wrong key · `404` wrong agent or number id · `400` number not imported provider-side, or destination not verified on a trial.
+**Then interrupt it mid-sentence.** It must stop talking immediately. That's barge-in working, and it's the difference between a demo that feels real and one that sounds broken. Transcripts print live in the bridge terminal.
 
-After you hang up:
-
-```bash
-uv run python scripts/spike_call.py --to +1416XXXXXXX --status conv_abc123
-```
-
-That returns status and the full transcript — the same endpoint `calls.py` will poll during the build to get `CallOutcome` input.
+`make spike TO=… ROLE=renter` switches to the caller-facing voice.
 
 ---
 
-## 4 · One webhook tool, end to end · ~2 min
+## Why outbound, not inbound, first
 
-Proves the agent can reach *your* code, which is the part everything else depends on.
+OpenAI's SIP connector makes *inbound* calls very clean — point a Twilio SIP trunk at `sip:<project-id>@sip.api.openai.com` and you're done. But **outbound over SIP isn't documented**, and outbound is your differentiator.
 
-```bash
-make tunnel                                    # separate terminal
-make tools URL=https://<your-domain>.ngrok.app # rewrites agent/tools.json
-```
+Media Streams handles both directions, and Twilio publishes official Python samples for each. So: one mechanism, both legs, no undocumented paths on the thing that wins.
 
-Register `record_preferences` from `agent/tools.json` in the provider dashboard, then call yourself and say *"two bedrooms in King West under thirty-four hundred."*
+If you want the inbound leg cleaner later, the SIP route is a drop-in for that half. Don't touch it tonight.
 
-**Done when your FastAPI logs the tool call with its arguments.** That's the whole architecture proven: phone → provider → your server.
+---
+
+## The three things that break
+
+Already handled in `spike_bridge.py`, but know them so you can debug at 13:00:
+
+1. **Audio format.** Twilio speaks base64 G.711 μ-law at 8kHz. Both `input_audio_format` and `output_audio_format` must be `g711_ulaw`. Mismatch gives silence or static and an hour of confusion.
+2. **Barge-in.** On `input_audio_buffer.speech_started`, clear Twilio's queued audio *and* truncate the assistant item. Skip either and the agent talks over the interruption.
+3. **`streamSid`.** Arrives on the `start` frame, required on every frame you send back. Miss it and audio silently goes nowhere.
 
 ---
 
 ## If it doesn't work by 4am
 
-Stop and go to bed. Bring the failure to the 11:15 gate and take the documented fallback — browser-mic Realtime for the inbound leg, keep the outbound calls. The outbound leg is the part worth saving; the inbound one is a convenience.
+Stop and go to bed. Bring it to the 11:15 gate and take the fallback: browser-mic Realtime over WebRTC for the inbound leg, keep the outbound calls. **The outbound leg is the half that wins**; inbound is a convenience.
 
-Do **not** burn two hours on audio debugging tonight. That's the trap this whole architecture was chosen to avoid.
+Do not burn two hours on audio debugging tonight.
 
 ---
 
@@ -94,4 +102,4 @@ Do **not** burn two hours on audio debugging tonight. That's the trap this whole
 make doctor
 ```
 
-Green means `.env` is complete and the tunnel URL is in `agent/tools.json`. Then sleep — the morning list is in `BACKLOG.md`.
+Green means `.env` is complete and the tunnel is in `agent/tools.json`. Then sleep — the morning list is in [BACKLOG.md](../BACKLOG.md).

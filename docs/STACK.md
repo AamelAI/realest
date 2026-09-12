@@ -10,7 +10,7 @@ Decisions are made. If you're about to add something that isn't here, it's out o
 | Backend | FastAPI + uvicorn | Async-native (needed for three concurrent calls), pydantic built in, free `/docs` page that screenshots well |
 | Data | **No database.** JSON → dict at startup | 50 read-only listings, ephemeral sessions. If the process dies mid-demo you're re-running the demo anyway |
 | Tunnel | ngrok with a **reserved static domain** | Tool webhook URLs are registered provider-side. A changed URL on restart silently breaks every tool |
-| Voice | Managed conversational telephony | See `.claude/skills/voice-calls/`. We never touch audio |
+| Voice | **OpenAI Realtime + Twilio Media Streams** | Marquee sponsor, event credits, free. Bridge already written and proven — see `scripts/spike_bridge.py` |
 | Frontend | Next.js 15 · Tailwind · **shadcn/ui** | Copy-paste cards, no theming setup, looks finished immediately |
 | Reorder animation | **Framer Motion `<motion.div layout>`** | Highest value-per-minute in the build. One prop gives the FLIP transition, and that reorder *is* the money shot |
 | Models | `openai` structured outputs · OpenRouter for fallback | `CallOutcome` extraction is where this matters |

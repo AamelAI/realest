@@ -37,12 +37,12 @@ If a change doesn't serve one of those, it's out of scope today.
 | **Never block speech on a network call** | Rank in memory, pre-fetch enrichment. Dead air reads as broken |
 | **Booking is plain code** | The model calls `book_viewing(listing_id, slot)`; the function does the write. Models improvising state changes is how live demos fail |
 | **Seeded listings only** | No live scraping. A scrape that fails on camera has no recovery |
-| **Don't build audio plumbing** | Managed telephony owns audio format, barge-in, interruption. See `.claude/skills/voice-calls/` |
+| **Don't touch the audio bridge** | `scripts/spike_bridge.py` already handles μ-law, barge-in and streamSid. Build on it, don't rewrite it |
 | **Every listing's `agent_phone` is a teammate's number** | We never cold-call real people with a bot |
 
 ## Architecture in one paragraph
 
-A single **session store** is the source of truth. The voice agent writes to it through webhook tools; the web page reads it by polling. Nothing else talks to anything. Voice transport is a managed provider — we never handle audio. Reasoning (preference extraction, call-outcome extraction, ranking, email drafting) is OpenAI structured outputs behind an OpenRouter fallback. Full detail and the exact state contract: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+A single **session store** is the source of truth. The voice agent writes to it through webhook tools; the web page reads it by polling. Nothing else talks to anything. Audio rides OpenAI Realtime through a Twilio Media Streams bridge that was written and proven before the event. Reasoning (preference extraction, call-outcome extraction, ranking, email drafting) is OpenAI structured outputs behind an OpenRouter fallback. Full detail and the exact state contract: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```
 phone ──▶ managed voice agent ──webhooks──▶ FastAPI ──▶ SessionStore
@@ -55,7 +55,7 @@ phone ──▶ managed voice agent ──webhooks──▶ FastAPI ──▶ Se
 
 | Layer | Choice |
 |---|---|
-| Voice transport | Managed conversational telephony (ElevenLabs ConvAI / Vapi) + Twilio number |
+| Voice | **OpenAI Realtime** over Twilio Media Streams. Marquee sponsor, event credits, nothing out of pocket |
 | Backend | Python 3.12 · FastAPI · uvicorn |
 | Reasoning | OpenAI Agents SDK + structured outputs |
 | Model fallback | OpenRouter preset |

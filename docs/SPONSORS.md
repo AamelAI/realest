@@ -16,11 +16,11 @@ Our reasoning layer, and it should stay genuinely central even though telephony 
 
 - **Agents SDK** (`openai-agents`) — tool loops, handoffs
 - **Structured outputs** — `Preferences` and `CallOutcome`. `CallOutcome` is what turns a transcript into something *rankable*. This is the most important single use of OpenAI in the project
-- **Realtime API** — if we go DIY voice; supports SIP via a trunking provider. Higher setup cost than managed. Fallback path only
+- **Realtime API** — **carries every call.** Twilio Media Streams proxies audio both ways through `scripts/spike_bridge.py`. Chosen over a third-party voice vendor because it's the marquee sponsor, the event supplies credits, and it costs us nothing
 
 → [Agents SDK quickstart](https://openai.github.io/openai-agents-python/) · [Voice agents quickstart](https://platform.openai.com/docs/guides/voice-agents)
 
-**README line:** *"OpenAI Agents SDK and structured outputs drive preference extraction, call-outcome extraction, ranking rationale and email drafting."*
+**README line:** *"Every call runs on the OpenAI Realtime API over Twilio Media Streams; Agents SDK and structured outputs drive preference extraction, call-outcome extraction, ranking rationale and email drafting."* That is a genuinely deep marquee-sponsor integration, not a logo drop.
 
 ### OpenRouter
 One API across hundreds of models with automatic fallback. Our cheapest route to the rubric's **"thoughtful failure handling."**
@@ -101,7 +101,7 @@ Identity for agents — Token Vault for scoped OAuth tokens with auto-refresh, a
 
 | Section of the build | Tool |
 |---|---|
-| Inbound + outbound voice | Managed conversational telephony + Twilio number |
+| Inbound + outbound voice | OpenAI Realtime + Twilio Media Streams |
 | Preference extraction | OpenAI structured outputs |
 | Call-outcome extraction | OpenAI structured outputs |
 | Ranking rationale, email drafting | OpenRouter (preset with fallback) |
