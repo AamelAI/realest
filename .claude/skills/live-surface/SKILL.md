@@ -19,6 +19,85 @@ It also does a job voice can't: tapping three checkboxes is far more reliable th
 
 This is correct engineering and it is also demo insurance.
 
+## One route, not one endpoint per user
+
+The link in the SMS is `https://realest.vercel.app/s/<token>`. That is **one** Next.js dynamic route — `web/app/s/[sid]/page.tsx` — with the session id as a path parameter. You never register anything per user.
+
+### The token
+
+Minted when the inbound call's websocket opens, mapped to the Twilio `CallSid`:
+
+```python
+import secrets
+token = secrets.token_urlsafe(8)          # 11 chars, 64 bits of entropy
+SESSIONS[token] = SessionState(session_id=token, call_sid=call_sid)
+```
+
+Short matters — it goes in an SMS and people glance at it. Don't put the raw `CallSid` in the URL (34 characters, and it leaks a Twilio identifier).
+
+### The security model, stated plainly
+
+**There is no auth. The token is the secret.** Same pattern as a password-reset link or a "anyone with the link" doc:
+
+- Unguessable — 64 bits from `secrets`, never `random`
+- Expires with the session (~2h TTL), and dies on process restart
+- No PII in the path
+- Anyone holding the link sees that shortlist
+
+That's the right trade for a caller who is mid-conversation and cannot log in. **Put it in the README under limitations** — SMS isn't encrypted end to end and a forwarded link stays live until expiry. Judges reward naming your own limitations; they penalize pretending they aren't there.
+
+## Proxy through Vercel — don't let the phone hit ngrok
+
+The page is on Vercel; `SessionStore` is on a laptop behind ngrok. Do **not** have the browser fetch the ngrok URL directly.
+
+```ts
+// web/app/api/state/route.ts
+export const dynamic = "force-dynamic";
+
+export async function GET(req: Request) {
+  const sid = new URL(req.url).searchParams.get("session");
+  const r = await fetch(`${process.env.BACKEND_URL}/api/state?session=${sid}`, {
+    cache: "no-store",
+  });
+  return new Response(await r.text(), {
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
+}
+```
+
+Three reasons, in order of how badly they bite:
+
+1. **Some mobile carriers and corporate DNS block ngrok domains outright.** If the demo phone is on a network that does, the page never loads and you find out on camera. Vercel is never blocked.
+2. No CORS. `usePolling` fetches the relative `/api/state` and same-origin rules apply.
+3. The ngrok URL never appears in client code or the network tab.
+
+`BACKEND_URL` is a Vercel env var. Changing tunnels means changing one variable, not redeploying the client.
+
+## First paint must not be blank
+
+The caller opens this while talking. A spinner is a dead beat in the demo.
+
+Server-render the initial list, then hand off to the poller:
+
+```tsx
+// web/app/s/[sid]/page.tsx
+export const dynamic = "force-dynamic";   // without this Next caches it statically
+
+export default async function Page({ params }: { params: { sid: string } }) {
+  const state = await fetch(`${process.env.BACKEND_URL}/api/state?session=${params.sid}`,
+                            { cache: "no-store" }).then(r => r.json());
+  return <Board sid={params.sid} initial={state} />;   // client component polls from here
+}
+```
+
+Pass `initial` into `usePolling` as the starting state so nothing flashes.
+
+**Unknown or expired token:** render a plain "this shortlist has expired" card. Never a 404 — a browser error page in the middle of a demo reads as broken software.
+
+## Many sessions at once
+
+The store is a dict keyed by token, so concurrent sessions just work. Test it — two of you calling at the same time is exactly what happens when you rehearse, and a shared-mutable-state bug shows up there first.
+
 ## Polling, not websockets
 
 A 3rd-place winner shipped exactly this, at 2000ms:

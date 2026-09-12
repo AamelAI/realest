@@ -87,6 +87,14 @@ async def sms_if_call_alive(conversation_id, to_number, link):
     twilio.messages.create(body=f"Your shortlist: {link}", from_=NUMBER, to=to_number)
 ```
 
+**Twilio trial accounts prepend `Sent from your Twilio trial account - ` to every SMS.** It will be in your demo video. Either upgrade, or frame the shot so the message body is what's legible.
+
+Keep the body to one line — long messages get split into multiple segments and arrive out of order:
+
+```
+Your shortlist: https://realest.vercel.app/s/x7Kp2mQa
+```
+
 ## Hour-of-day judgment
 
 Before any outbound call, check local time. Outside roughly 9:00–19:00, **the agent declines and says why**:
