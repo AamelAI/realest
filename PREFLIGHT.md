@@ -10,7 +10,7 @@ Companion to [PLAYBOOK.md](PLAYBOOK.md), which covers strategy, the demo script 
 
 **`AamelAI/base` is empty.** Cloned and verified — zero commits, zero refs, 0 KB, created 06:23 UTC today. There is no architecture doc, no sponsor notes and no skeleton in it. Whatever you thought you pushed didn't land. Everything below assumes we're scaffolding from nothing, which is fine — the repo being brand-new and empty also makes eligibility airtight.
 
-**It's private.** A **public** GitHub repo is one of the five required submission items. Flip it before 15:30 or the submission is incomplete.
+**It stays private — that's by design.** `AamelAI/base` is the team template. Everyone clones it, builds on it, and pushes the finished work to a **separate public repo** that becomes the submission. Create that public repo before doors so nobody is doing repo admin at 15:20.
 
 ---
 
