@@ -1,15 +1,15 @@
 # The four demo listings — task `0.8`
 
-Picked from the 124 seeded rentals. **All four are real rows in `data/listings.json`**,
-unedited except one mislabelled neighbourhood (`L028`, 6020 Bathurst, was tagged
-King West — it is North York). Nothing was fabricated to make the script work.
+Picked from the seeded Toronto rentals. **All four are real rows in
+`data/listings.json`** — real addresses, real rents, the listings' own photos.
+Nothing was fabricated or substituted to make the script work.
 
 ## The brief the caller speaks
 
-> "One bedroom, King West, Liberty Village or down by the water, under twenty-eight
-> hundred. I've got a dog."
+> "Two bedroom, Yorkville or the Annex, under thirty-four hundred. I've got a dog."
 
-`beds=1 · areas=[King West, Liberty Village, Waterfront] · max_rent=2800 · pets=dog`
+`beds=2 · areas=[Yorkville, The Annex] · max_rent=3400 · pets=dog`
+
 **Do not mention parking in the opening brief.** It is the lever for the reorder.
 
 ## The reorder beat
@@ -18,33 +18,45 @@ Mid-call the caller says:
 
 > "Actually — parking matters more than anything."
 
-`parking=true · priority_order=["parking"]` → **3 of 4 cards change position.**
+`parking=true · priority_order=["parking"]` → **all 4 cards change position.**
 
 | | before | after |
 |---|---|---|
-| 1 | L013 $2,221 | L013 $2,221 |
-| 2 | L061 $2,495 | L063 $2,070 |
-| 3 | L054 $2,797 | L061 $2,495 |
-| 4 | L063 $2,070 | L054 $2,797 |
+| 1 | L092 $3,000 | L095 $3,290 |
+| 2 | L095 $3,290 | L086 $2,690 |
+| 3 | L086 $2,690 | L100 $2,290 |
+| 4 | L100 $2,290 | L092 $3,000 |
 
 ## The four, and what each call reveals
 
 | id | address | listed | role on camera |
 |---|---|---|---|
-| `L013` | 370 Queens Quay West, Waterfront | $2,221 | **DEAD** — "leased Tuesday." Was #1. Sinks to #4 |
-| `L054` | 57 Spadina Avenue, King West | $2,797 | **PRICE WRONG** — parking is $180 on top → **$2,977**, over budget |
-| `L061` | 25 Ordnance Street, Liberty Village | $2,495 | **BOOKED** — available, locker included, Saturday 2:00pm. *Cats only, and the caller has a dog* |
-| `L063` | 131 Mill Street, Waterfront | $2,070 | **NO ANSWER** — email drafted, shown on the card with Send |
+| `L092` | 155 Yorkville Avenue | $3,000 | **DEAD** — "leased Tuesday." Opens at #1, ends at #4 |
+| `L095` | 322 Dupont Street, The Annex | $3,290 | **PRICE WRONG** — parking is $180 on top → **$3,470**, over budget |
+| `L086` | 155 Yorkville Avenue | $2,690 | **BOOKED** — available, Saturday 2:00pm. *Cats only, and the caller has a dog* |
+| `L100` | 660 Huron Street, The Annex | $2,290 | **NO ANSWER** — email drafted, shown on the card with Send |
 
 ### Final order after the calls
 
-`L063 (no answer) · L061 (booked) · L054 ($2,977, over) · L013 (dead)`
+`L086 (booked) · L100 (no answer) · L095 ($3,470, over) · L092 (dead)`
 
-The top pick dies and drops to last. That is the shot.
+The card that opened at #1 dies and drops to last. That is the shot.
+
+## Why these four
+
+- **Every photo is a real interior or building shot.** 33 of the seeded listings
+  carry 16:9 property-manager ad graphics as their first photo — "Two Months Rent
+  Free", "½ Month Free" stickers. All four here are clear of that. `L086` uses its
+  own second photo, because the feed's first is the building exterior.
+- **Rents are plausible for the neighbourhood.** The feed mixes room shares in
+  with whole units; `MIN_RENT` in `scripts/scrape_rentals.py` now drops them, so
+  no $1,050 three-bath "apartment" floats to the top of a shortlist.
+- **The Annex scores as a neighbour of Yorkville**, not an exact match, so the
+  card shows its real neighbourhood and still ranks honestly.
 
 ## Still to do
 
-**Every `agent_phone` in the file is the placeholder `+14165550100`.** Before
-filming, the four rows above need three teammates' real numbers — one person per
-call, and they need to know which listing they are playing and the script above.
-We never dial anyone outside the team.
+**Every `agent_phone` is the placeholder `+14165550100`.** Before filming, the
+four rows above need three teammates' real numbers — one person per call, each
+knowing which listing they are playing and the script above. We never dial
+anyone outside the team.
