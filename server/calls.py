@@ -1,62 +1,206 @@
-"""Outbound calls and CallOutcome extraction.
+"""Outbound calls, SMS, CallOutcome extraction, email fallback.
 
 Read .claude/skills/voice-calls/ first.
-DO NOT build an audio pipeline. The managed provider owns audio entirely.
+DO NOT build an audio pipeline. bridge.py owns audio entirely.
 """
 from __future__ import annotations
 
-from schemas import CallOutcome, Listing
+import asyncio
+import os
+from datetime import datetime
+
+from openai import AsyncOpenAI
+
+import listings as L
+import state as store
+from schemas import CallOutcome, CallStatus
 
 BUSINESS_HOURS = (9, 19)  # local; outside this the agent declines and offers email
+CALL_TIMEOUT = 90         # never leave a card spinning
+
+OUT_OF_HOURS = (
+    "It's outside business hours - I'd rather not cold-call them now. "
+    "I've drafted emails instead and I'll text you when they reply."
+)
+
+_ended: dict[str, bool] = {}
 
 
-def within_business_hours() -> bool:
-    """TODO(hackathon): local-time check. Outside hours the agent DECLINES to
-    dial and says why - that is judgment about human norms, not a retry, and
-    it belongs on camera."""
-    raise NotImplementedError
+def _twilio():
+    from twilio.rest import Client
+    sid, tok = os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN")
+    return Client(sid, tok) if sid and tok else None
 
 
-async def place_call(session_id: str, listing: Listing, extra_questions: list[str]) -> str:
-    """One POST. Returns conversation_id.
+def _openai() -> AsyncOpenAI | None:
+    key = os.getenv("OPENAI_API_KEY")
+    return AsyncOpenAI(api_key=key) if key else None
 
-    Pass session_id and listing_id as dynamic variables - they come back on the
-    outcome webhook and are how you know which card to update.
 
-    TODO(hackathon): implement.
+def within_business_hours(now: datetime | None = None) -> bool:
+    """Outside hours the agent DECLINES to dial and says why - that is judgment
+    about human norms, not a retry, and it belongs on camera."""
+    if os.getenv("FORCE_BUSINESS_HOURS") == "1":
+        return True
+    h = (now or datetime.now()).hour
+    return BUSINESS_HOURS[0] <= h < BUSINESS_HOURS[1]
+
+
+async def place_call(session_id: str, listing_id: str, extra_questions: list[str]) -> str:
+    """One POST. Returns the Twilio call sid.
+
+    session_id and listing_id ride the TwiML query string; they come back on the
+    websocket and are how we know which card an outcome belongs to.
     """
-    raise NotImplementedError
+    lst = L.by_id(listing_id)
+    client, public = _twilio(), os.getenv("PUBLIC_URL", "").rstrip("/")
+    if lst is None or client is None or not public:
+        raise RuntimeError("twilio or listing not configured")
+
+    q = f"session={session_id}&listing={listing_id}"
+    if extra_questions:
+        q += "&extra=" + "|".join(extra_questions).replace(" ", "%20")
+
+    call = await asyncio.to_thread(
+        client.calls.create,
+        to=lst.agent_phone,
+        from_=os.getenv("TWILIO_PHONE_NUMBER"),
+        url=f"{public}/twiml/listing?{q}",
+    )
+    return call.sid
 
 
-async def fan_out(session_id: str, listings: list[Listing], extra_questions: list[str]) -> list:
-    """Three at once.
+async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list[str]) -> list:
+    """Three at once. Cards are already CALLING before we get here - that
+    simultaneity is the shot. One failure must never kill the rest."""
 
-    - Flip each card to CALLING BEFORE awaiting, so all three light up together.
-      That simultaneity is the shot.
-    - asyncio.gather(..., return_exceptions=True) - one failure must not kill the rest.
-    - asyncio.wait_for(..., timeout=90) per call. Never leave a card spinning.
-    - Timeout or exception -> NO_ANSWER -> draft the email.
+    async def one(lid: str):
+        try:
+            return await asyncio.wait_for(
+                place_call(session_id, lid, extra_questions), timeout=CALL_TIMEOUT
+            )
+        except Exception as exc:
+            await mark_no_answer(session_id, lid, extra_questions)
+            return exc
 
-    TODO(hackathon): implement.
-    """
-    raise NotImplementedError
+    return await asyncio.gather(*(one(l) for l in listing_ids), return_exceptions=True)
+
+
+async def mark_no_answer(session_id: str, listing_id: str, extra_questions: list[str]) -> None:
+    """Timeout or error -> NO_ANSWER -> draft the email. Never leave it spinning."""
+    draft = await draft_email(listing_id, extra_questions)
+
+    def write(s):
+        for st in s.listings:
+            if st.listing_id == listing_id and st.status is CallStatus.CALLING:
+                st.status = CallStatus.NO_ANSWER
+                st.email_draft = draft
+
+    await store.mutate(session_id, write)
 
 
 async def extract_outcome(transcript: str, extra_questions: list[str]) -> CallOutcome:
     """Transcript -> CallOutcome via OpenAI structured outputs.
 
-    Never invent a field the human didn't say. Always populate `source`
-    ("Mark, 1:42pm") - provenance is what turns the page into evidence.
-
-    TODO(hackathon): implement.
+    Never invent a field the human didn't say. A hallucinated value here
+    destroys the claim the entire submission rests on.
     """
-    raise NotImplementedError
+    client = _openai()
+    if client is None or not transcript.strip():
+        return CallOutcome(raw_transcript=transcript)
+
+    asked = "; ".join(extra_questions) or "none"
+    r = await client.responses.parse(
+        model="gpt-4.1-mini",
+        input=[
+            {"role": "system", "content":
+             "Extract ONLY what the listing agent actually said in this phone call. "
+             "If they did not mention something, leave it null or empty - never guess. "
+             f"The caller also asked us to find out: {asked}. "
+             "Set `source` to who said it and when, e.g. 'Mark, 1:42pm'."},
+            {"role": "user", "content": transcript},
+        ],
+        text_format=CallOutcome,
+    )
+    oc = r.output_parsed or CallOutcome()
+    oc.raw_transcript = transcript
+    if not oc.source:
+        oc.source = datetime.now().strftime("agent, %-I:%M%p").lower()
+    return oc
 
 
-async def draft_email(listing: Listing, extra_questions: list[str]) -> str:
-    """Nobody answered, or it's the wrong hour. Draft, show on the card, one tap
-    to send. Do not build SMTP plumbing.
+async def draft_email(listing_id: str, extra_questions: list[str]) -> str:
+    """Nobody answered, or it's the wrong hour. Draft it, show it on the card,
+    one tap to send. Do not build SMTP plumbing."""
+    lst = L.by_id(listing_id)
+    if lst is None:
+        return ""
+    asks = ["Is the unit still available?",
+            "What does parking actually cost on top of the listed rent?",
+            "What's the pet policy?"] + list(extra_questions)
+    body = "\n".join(f"- {a}" for a in asks)
+    return (
+        f"Subject: {lst.address} - still available?\n\n"
+        f"Hi {lst.agent_name or 'there'},\n\n"
+        f"I'm an AI assistant enquiring on behalf of a client about {lst.address} "
+        f"(listed at ${lst.rent:,}). A few quick questions:\n\n{body}\n\n"
+        "Happy to arrange a viewing this weekend if it's still open.\n\nThanks!"
+    )
 
-    TODO(hackathon): implement.
-    """
-    raise NotImplementedError
+
+async def send_email(session_id: str, listing_id: str) -> bool:
+    """Resend if configured; otherwise the draft stays on the card as evidence."""
+    import httpx
+    key = os.getenv("RESEND_API_KEY")
+    s = store.get(session_id)
+    st = next((x for x in (s.listings if s else []) if x.listing_id == listing_id), None)
+    lst = L.by_id(listing_id)
+    if not (key and st and st.email_draft and lst):
+        return False
+    subject, _, body = st.email_draft.partition("\n\n")
+    async with httpx.AsyncClient(timeout=10) as c:
+        r = await c.post("https://api.resend.com/emails",
+                         headers={"Authorization": f"Bearer {key}"},
+                         json={"from": "Realest <onboarding@resend.dev>",
+                               "to": [lst.agent_email], "subject": subject.replace("Subject: ", ""),
+                               "text": body})
+    return r.status_code < 300
+
+
+async def sms(session_id: str, body: str, to: str | None = None) -> bool:
+    """One line. Long messages split into segments and arrive out of order."""
+    client = _twilio()
+    to = to or store.get(session_id).caller_phone if store.get(session_id) else None
+    if client is None or not to:
+        return False
+    await asyncio.to_thread(client.messages.create, body=body,
+                            from_=os.getenv("TWILIO_PHONE_NUMBER"), to=to)
+    return True
+
+
+async def sms_if_call_alive(session_id: str, call_sid: str, link: str) -> None:
+    """SITE COBRA sent the link 5s into the call, then cancelled if it had ended.
+    The link lands while the caller is still talking - that's what makes the
+    second screen feel like part of the conversation."""
+    await asyncio.sleep(5)
+    if _ended.get(call_sid):
+        return
+    await sms(session_id, f"Your shortlist: {link}")
+
+
+def mark_call_ended(call_sid: str) -> None:
+    _ended[call_sid] = True
+
+
+async def email_all(session_id: str, listing_ids: list[str], extra_questions: list[str]) -> None:
+    """Out of hours: draft for every selected listing, show them all on the page."""
+    for lid in listing_ids:
+        draft = await draft_email(lid, extra_questions)
+
+        def write(s, lid=lid, draft=draft):
+            for st in s.listings:
+                if st.listing_id == lid:
+                    st.status = CallStatus.NO_ANSWER
+                    st.email_draft = draft
+
+        await store.mutate(session_id, write)
