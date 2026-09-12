@@ -33,6 +33,64 @@ OUT_OF_HOURS = (
 
 E164 = re.compile(r"^\+[1-9]\d{7,14}$")
 
+# session_id -> listing-agent number the caller asked us to dial (e.g. 4375550100)
+_session_dest: dict[str, str] = {}
+
+
+def as_e164(raw: str) -> str:
+    """Accept +14375550100, 4375550100, or 1-437-555-0100. Empty if not a phone."""
+    if not raw:
+        return ""
+    raw = str(raw).strip()
+    if E164.match(raw):
+        return raw
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) == 11 and digits.startswith("1"):
+        cand = "+" + digits
+    elif len(digits) == 10:
+        cand = "+1" + digits
+    else:
+        return ""
+    return cand if E164.match(cand) else ""
+
+
+def set_session_dest(session_id: str, phone: str) -> str:
+    """Remember which number this session should ring for listing-agent calls."""
+    dest = as_e164(phone)
+    if dest:
+        _session_dest[session_id] = dest
+    return dest
+
+
+def destination(session_id: str, listing) -> str:
+    """Where the listing agent call actually goes.
+
+    Caller-stated number (\"call 4375550100\") wins, then DEMO_AGENT_PHONE,
+    then the listing's own teammate number.
+    """
+    override = _session_dest.get(session_id) or as_e164(os.getenv("DEMO_AGENT_PHONE", ""))
+    if override:
+        return override
+    return listing.agent_phone if listing else ""
+
+
+def unique_destinations(session_id: str, listing_ids: list[str]) -> list[str]:
+    """One live ring per number. The demo shortlist shares one teammate phone."""
+    if transport.is_stub():
+        return listing_ids
+    seen: set[str] = set()
+    out: list[str] = []
+    for lid in listing_ids:
+        lst = L.by_id(lid)
+        dest = destination(session_id, lst)
+        if dest and dest in seen:
+            log.info("fan_out[%s]: skip %s — already calling %s", session_id, lid, dest)
+            continue
+        if dest:
+            seen.add(dest)
+        out.append(lid)
+    return out
+
 _ended: dict[str, bool] = {}           # session_id -> the call has already ended
 _link_sms_started: set[str] = set()    # session_id -> the 5s link-SMS timer already ran once
 _recent_sms: dict[tuple[str, str], float] = {}  # (to, body) -> last-sent monotonic time
@@ -79,8 +137,9 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
 
     import voice
     if voice.is_elevenlabs():
+        to = destination(session_id, lst)
         handle = await voice.get_provider().place_outbound(
-            to_number=lst.agent_phone,
+            to_number=to,
             role="listing",
             dynamic_variables={
                 "session_id": session_id,
@@ -93,8 +152,8 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
             },
         )
         cid = handle.call_sid or handle.conversation_id or ""
-        log.info("place_call[%s]: elevenlabs %s → %s conv=%s sid=%s",
-                 session_id, listing_id, lst.agent_phone,
+        log.info("place_call[%s]: elevenlabs listing-agent %s → %s conv=%s sid=%s",
+                 session_id, listing_id, to,
                  handle.conversation_id, handle.call_sid)
         if handle.conversation_id:
             _conversations[(session_id, listing_id)] = handle.conversation_id
@@ -113,7 +172,7 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
 
     call = await asyncio.to_thread(
         client.calls.create,
-        to=lst.agent_phone,
+        to=destination(session_id, lst),
         from_=os.getenv("TWILIO_PHONE_NUMBER"),
         url=f"{public}/twiml/listing?{q}",
     )
@@ -126,20 +185,13 @@ async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list
 
     async def one(lid: str):
         try:
-            if transport.is_eleven():
-                # Real call. Same extraction, same re-rank - only the dial tone
-                # is different from the stub path.
-                transcript = await asyncio.wait_for(
-                    transport.eleven_call(lid, extra_questions), timeout=180
-                )
-            elif transport.is_stub():
+            if transport.is_stub():
                 # A scripted listing agent answers. The transcript still goes
                 # through the real extract_outcome() and the real re-rank -
                 # only the dial tone is fake.
                 transcript = await asyncio.wait_for(
                     transport.stub_call(lid, extra_questions), timeout=CALL_TIMEOUT
                 )
-            if transport.is_eleven() or transport.is_stub():
                 if transcript is None:
                     await mark_no_answer(session_id, lid, extra_questions)
                     return None
@@ -150,6 +202,7 @@ async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list
                     **oc.model_dump(mode="json"),
                 })
                 return lid
+            # TRANSPORT=voice: real outbound on the Listing agent.
             return await asyncio.wait_for(
                 place_call(session_id, lid, extra_questions), timeout=CALL_TIMEOUT
             )

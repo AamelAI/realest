@@ -287,6 +287,12 @@ def _resolve_ids(raw: list, session_id: str) -> list[str]:
     out: list[str] = []
     for item in raw:
         token = str(item).strip()
+        dest = calls.as_e164(token)
+        if dest:
+            # "call 4375550100" means: ring that number as the listing agent
+            # for this shortlist, not a listing id.
+            calls.set_session_dest(session_id, dest)
+            continue
         if token in known:
             out.append(token)
             continue
@@ -319,7 +325,9 @@ def _resolve_listing_id(payload: dict, session_id: str) -> str:
 async def agent_start_calls(payload: dict):
     """Verify these listings. Fan out. Cards flip to CALLING before any await."""
     sid = _ensure_session(payload)
-    ids = _resolve_ids(_as_list(payload.get("listing_ids")), sid)
+    ids = calls.unique_destinations(
+        sid, _resolve_ids(_as_list(payload.get("listing_ids")), sid)
+    )
     extra = _as_list(payload.get("extra_questions"))
     phone = _apply_caller(payload)
 
