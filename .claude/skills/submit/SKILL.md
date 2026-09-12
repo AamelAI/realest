@@ -15,7 +15,7 @@ The deliverable is not a working agent. It's **a repo and a video that prove one
 
 1. Project title — **Realest**
 2. Written description
-3. **Public** GitHub repo — *check this, `AamelAI/base` was created private*
+3. **Public** GitHub repo — **not `AamelAI/base`**, which is the private template. Push to the separate public submission repo and paste that URL
 4. Two-minute demo video
 5. Social post tagging **OpenAI, Georgian, CopilotKit, OpenRouter, AI Tinkerers, Human Feedback Foundation**
 

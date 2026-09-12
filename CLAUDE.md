@@ -102,6 +102,10 @@ Load the matching skill before you start that piece of work. They carry the cont
 - Keep functions short enough to read at 14:00 on four hours of sleep.
 - Commit often with real messages — the commit history is how we prove what was built during the event.
 
+## Repos
+
+`AamelAI/base` (this one) is the **private team template**. Work happens in clones of it. The finished project is pushed to a **separate public repo**, and that public URL is the submission. Don't paste a `base` link into the submission form.
+
 ## Eligibility
 
 Core functionality must be built **during** the event (11:15–15:30). Scaffolding, credentials, dependencies, seed data and empty module stubs were prepared beforehand and are explicitly allowed; so are templates, libraries and prompts.

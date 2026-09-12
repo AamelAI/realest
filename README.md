@@ -115,4 +115,6 @@ Realest is the inverse: it represents the renter and dials outward. That side is
 
 ## Status
 
-Pre-event scaffold. Credentials, dependencies, seed data and empty module stubs prepared beforehand — all explicitly permitted. Every stub carries a `TODO(hackathon)` marker; all agent logic, ranking, call orchestration and the live surface are built during the event (11:15–15:30).
+This repo (`AamelAI/base`) is the **private team template**. Clone it, build on it, and push the finished project to the **public submission repo** — that public URL is what goes in the submission form.
+
+Pre-event scaffold only: credentials, dependencies, seed data and empty module stubs, all explicitly permitted. Every stub carries a `TODO(hackathon)` marker; all agent logic, ranking, call orchestration and the live surface are built during the event (11:15–15:30).
