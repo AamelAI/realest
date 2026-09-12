@@ -17,20 +17,20 @@
         {
           "id": "session_id",
           "type": "string",
-          "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it.",
-          "dynamic_variable": "",
+          "description": "",
+          "dynamic_variable": "session_id",
           "constant_value": "",
-          "value_type": "llm_prompt",
-          "required": false,
+          "value_type": "dynamic_variable",
+          "required": true,
           "enum": null
         },
         {
           "id": "caller_phone",
           "type": "string",
-          "description": "Caller's mobile in E.164, e.g. +14165551234. Use the number they are calling from if you know it. Omit if unknown.",
-          "dynamic_variable": "",
+          "description": "",
+          "dynamic_variable": "caller_phone",
           "constant_value": "",
-          "value_type": "llm_prompt",
+          "value_type": "dynamic_variable",
           "required": false,
           "enum": null
         }

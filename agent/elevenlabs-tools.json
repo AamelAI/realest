@@ -102,14 +102,16 @@
           "properties": {
             "session_id": {
               "type": "string",
-              "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it."
+              "description": "Dynamic variable {{session_id}}. Do not invent this.",
+              "dynamic_variable": "session_id"
             },
             "caller_phone": {
               "type": "string",
-              "description": "Caller's mobile in E.164, e.g. +14165551234."
+              "description": "Dynamic variable {{caller_phone}}. Do not invent this.",
+              "dynamic_variable": "caller_phone"
             }
           },
-          "required": []
+          "required": ["session_id"]
         }
       }
     },
