@@ -78,6 +78,7 @@ class ListingState(BaseModel):
 
 class SessionState(BaseModel):
     session_id: str
+    caller_phone: str = ""          # where the shortlist SMS goes
     preferences: Preferences = Field(default_factory=Preferences)
     listings: list[ListingState] = Field(default_factory=list)
     agent_says: str = ""
