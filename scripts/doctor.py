@@ -48,7 +48,20 @@ def main() -> int:
 
     fails += not tool("uv", "curl -LsSf https://astral.sh/uv/install.sh | sh")
     fails += not tool("node", "https://nodejs.org or `brew install node`")
-    fails += not tool("ngrok", "brew install ngrok, then `ngrok config add-authtoken ...`")
+    if shutil.which("ngrok"):
+        v = subprocess.run(["ngrok", "version"], capture_output=True, text=True).stdout.strip()
+        try:
+            major, minor = (int(x) for x in v.split()[-1].split(".")[:2])
+            if (major, minor) < (3, 20):
+                bad(f"{v} — too old", "ngrok update  (accounts require 3.20+; free tier is NOT exempt)")
+                fails += 1
+            else:
+                ok(f"ngrok {D}{v}{X}")
+        except Exception:
+            ok(f"ngrok {D}{v}{X}")
+    else:
+        bad("ngrok not found", "brew install ngrok && ngrok config add-authtoken <token>")
+        fails += 1
 
     if sys.version_info[:2] != (3, 12):
         meh(f"running python {platform.python_version()}, repo pins 3.12",

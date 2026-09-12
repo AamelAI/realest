@@ -10,11 +10,18 @@ install:            ## one-time: python deps + web deps
 dev:                ## FastAPI on :8000
 	uv run uvicorn main:app --reload --port 8000 --app-dir server
 
-tunnel:             ## public URL the voice provider can reach
-	ngrok http 8000
+tunnel:             ## public URL Twilio can reach (uses NGROK_DOMAIN from .env)
+	@D=$$(grep -E '^NGROK_DOMAIN=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
+	if [ -n "$$D" ]; then echo "→ static: https://$$D"; ngrok http --url=$$D 8000; \
+	else echo "! NGROK_DOMAIN not set in .env — using a RANDOM url that dies on restart."; \
+	     echo "  Claim your free static domain: https://dashboard.ngrok.com/domains"; \
+	     ngrok http 8000; fi
 
 web:                ## Next.js on :3000
 	cd web && npm run dev
+
+deploy:             ## push the page to Vercel (free Hobby tier)
+	cd web && npx vercel --prod
 
 listings:           ## rebuild listings from the raw scrape: make listings PHONE=+1416... EMAIL=you@x.com
 	uv run python scripts/scrape_rentals.py --phone "$(PHONE)" --email "$(EMAIL)"
