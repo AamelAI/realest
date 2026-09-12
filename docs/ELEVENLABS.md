@@ -113,7 +113,7 @@ The listing call is not the product. The card flip is.
 
 **Poll (the safety net).** After `place_call`, the server polls `GET /v1/convai/conversations/{id}` every 5s for up to 90s. If the webhook already wrote an outcome, the poll stops. If the call ends with a transcript and no webhook, `extract_outcome()` fills the card. If nothing arrives, the card goes `no_answer` and an email is drafted. Cards must not stay `calling`.
 
-**Inbound session.** If the renter tool omits `session_id`, the server uses ElevenLabs `conversation_id`, or mints a short token. The JSON always echoes `session_id` so the next tool can pass it through. First `/agent/preferences` for a new session starts the 5s shortlist SMS (`sms_if_call_alive`). Empty `caller_phone` means the SMS is skipped, not an error.
+**Inbound session.** `/agent/init` mints `session_id` at pickup and texts the shortlist link as soon as we have `caller_id`. If a later tool omits `session_id`, the server reuses that session by caller phone, then ElevenLabs `conversation_id`, then mints a token. The JSON always echoes `session_id`. Empty `caller_phone` means the SMS is skipped, not an error — the agent should ask for a mobile and call `send_sms`.
 
 ---
 

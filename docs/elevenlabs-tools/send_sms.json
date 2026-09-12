@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "send_sms",
-  "description": "Text the caller the shortlist link. Call this after record_preferences has returned, or when they ask for the link. After it returns, read the speak field aloud. If sent is false, ask for a mobile number with country code and call this again.",
+  "description": "Text the caller the shortlist link. Call this immediately at the start of the inbound call, before waiting for preferences, and again if they ask for the link or say they did not get it. After it returns, read the speak field aloud. If sent is false, ask for a mobile number with country code and call this again.",
   "api_schema": {
     "url": "https://zipping-scarf-actress.ngrok-free.dev/agent/sms",
     "method": "POST",

@@ -27,13 +27,17 @@ import listings as L
 import state as store
 
 TOOLS = json.loads(open("agent/tools.json").read())["tools"]
-RENTER_TOOLS = [t for t in TOOLS if t["name"] in ("record_preferences", "start_calls", "book_viewing")]
+RENTER_TOOLS = [t for t in TOOLS if t["name"] in ("record_preferences", "start_calls", "book_viewing", "send_sms")]
 LISTING_TOOLS = [t for t in TOOLS if t["name"] == "record_outcome"]
 
 RENTER_PROMPT = (
     "You are an AI assistant that finds rentals in Toronto and calls listing agents "
     "on the caller's behalf. Open with: 'Hi, I'm an AI assistant that finds rentals in "
-    "Toronto and calls the listing agents for you. What are you after?' "
+    "Toronto and calls the listing agents for you. I'll text you a live shortlist "
+    "link now. What are you after?' "
+    "Call send_sms immediately at the start of the call, before waiting for "
+    "preferences, so they get the shortlist page. If it fails, ask for a mobile "
+    "with country code and call send_sms again. "
     "Call record_preferences the moment they describe what they want, and AGAIN every "
     "time they change or reprioritise anything - do not wait for the end. "
     "Once they have a shortlist, tell them listings go stale fast, offer to call the "
@@ -60,6 +64,9 @@ async def dispatch(name: str, args: dict, session_id: str, listing_id: str = "")
     under 25 words, written as speech."""
     import main
 
+    if name == "send_sms":
+        r = await main.agent_sms({"session_id": session_id, **args})
+        return r["speak"]
     if name == "record_preferences":
         r = await main.agent_preferences({"session_id": session_id, **args})
         return r["speak"]
