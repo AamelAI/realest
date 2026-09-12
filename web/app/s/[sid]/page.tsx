@@ -5,7 +5,7 @@ import { DEFAULT_STATE, type SessionState } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 async function getState(sid: string): Promise<SessionState | null> {
-  const backend = process.env.BACKEND_URL;
+  const backend = process.env.BACKEND_URL?.replace(/\/+$/, "");
   if (!backend) return null;
   try {
     const r = await fetch(`${backend}/api/state?session=${encodeURIComponent(sid)}`, {
