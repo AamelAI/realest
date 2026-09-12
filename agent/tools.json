@@ -24,11 +24,11 @@
     {
       "type": "function",
       "name": "start_calls",
-      "description": "Call this when the caller has confirmed which listings they want verified. BEFORE calling it, always ask whether there is anything else they want asked on the call.",
+      "description": "Call this when the caller has confirmed which listings they want verified, or when they give a number to call as the listing agent (e.g. 4375550100). BEFORE calling it, always ask whether there is anything else they want asked on the call.",
       "parameters": {
         "type": "object",
         "properties": {
-          "listing_ids": { "type": "array", "items": { "type": "string" }, "description": "Listings to verify, e.g. [L061, L003]." },
+          "listing_ids": { "type": "array", "items": { "type": "string" }, "description": "Listings to verify, e.g. [L061, L003], or the listing-agent number 4375550100." },
           "extra_questions": { "type": "array", "items": { "type": "string" }, "description": "Anything extra the caller asked us to find out." }
         },
         "required": ["listing_ids"]

@@ -54,9 +54,19 @@ The card that opened at #1 dies and drops to last. That is the shot.
 - **The Annex scores as a neighbour of Yorkville**, not an exact match, so the
   card shows its real neighbourhood and still ranks honestly.
 
-## Still to do
+## Demo listing-agent number
 
-**Every `agent_phone` is the placeholder `+14165550100`.** Before filming, the
-four rows above need three teammates' real numbers — one person per call, each
-knowing which listing they are playing and the script above. We never dial
-anyone outside the team.
+Every seeded row (and any number the caller speaks) dials **`+14375550100`**.
+The outbound call uses the **Listing** ElevenLabs agent (`ELEVENLABS_LISTING_AGENT_ID`),
+not the renter. Say *"call the shortlist"* or *"call 437-555-0100"* — `start_calls`
+treats that number as the listing agent for the current cards.
+
+Rebuild the catalogue with:
+
+```
+make listings PHONE=+14375550100 EMAIL=you@example.com
+make seed
+```
+
+Set `TRANSPORT=voice`, `VOICE_PROVIDER=elevenlabs`, and `DEMO_AGENT_PHONE=+14375550100`.
+Trial Twilio only rings **Verified Caller IDs** — add this number there first.
