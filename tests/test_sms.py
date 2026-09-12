@@ -55,6 +55,12 @@ def reset_sms_module_state() -> None:
     calls._ended.clear()
     calls._link_sms_started.clear()
     calls._recent_sms.clear()
+    calls.SMS_LINK_DELAY_S = 5
+    try:
+        import main
+        main._linked.clear()
+    except Exception:
+        pass
 
 
 async def new_session(sid: str, phone: str = "+14165551234"):
@@ -154,6 +160,7 @@ async def _run() -> None:
     reset_sms_module_state()
     fake = use_fake_twilio()
     import main
+    main._linked.clear()
     sid = "s-booking"
     await main.agent_preferences({"session_id": sid, "beds": 2, "max_rent": 4000})
     s = store.get(sid)

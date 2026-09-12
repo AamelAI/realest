@@ -113,7 +113,13 @@ The listing call is not the product. The card flip is.
 
 **Poll (the safety net).** After `place_call`, the server polls `GET /v1/convai/conversations/{id}` every 5s for up to 90s. If the webhook already wrote an outcome, the poll stops. If the call ends with a transcript and no webhook, `extract_outcome()` fills the card. If nothing arrives, the card goes `no_answer` and an email is drafted. Cards must not stay `calling`.
 
-**Inbound session.** `/agent/init` mints `session_id` at pickup and texts the shortlist link as soon as we have `caller_id`. If a later tool omits `session_id`, the server reuses that session by caller phone, then ElevenLabs `conversation_id`, then mints a token. The JSON always echoes `session_id`. Empty `caller_phone` means the SMS is skipped, not an error — the agent should ask for a mobile and call `send_sms`.
+**Inbound session.** `/agent/init` mints `session_id` at pickup and texts the shortlist link as soon as we have `caller_id` (bare `4375550100` is fine — we normalize to E.164). Wire this or the SMS never leaves:
+
+1. Workspace **Agents → Settings** → conversation initiation webhook = `{PUBLIC_URL}/agent/init`
+2. Renter agent **Security** → enable *Fetch initiation client data from a webhook*
+3. `send_sms` / `record_preferences` `caller_phone` = dynamic variable `system__caller_id` (not required)
+
+If a later tool omits `session_id`, the server reuses that session by caller phone, then ElevenLabs `conversation_id`, then mints a token. Trial Twilio only texts **Verified Caller IDs**. Restart `make dev` after pulling so the new send path is live.
 
 ---
 

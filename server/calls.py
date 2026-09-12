@@ -22,7 +22,7 @@ from schemas import CallOutcome, CallStatus
 log = logging.getLogger("realest.calls")
 
 BUSINESS_HOURS = (9, 19)  # local; outside this the agent declines and offers email
-CALL_TIMEOUT = 90         # never leave a card spinning
+CALL_TIMEOUT = 120        # listing-agent call + extract; start_calls waits this out
 SMS_LINK_DELAY_S = 5      # SITE COBRA's trick: link lands while the caller is still talking
 SMS_DEDUPE_WINDOW_S = 30  # same (to, body) fired twice within this window -> only sent once
 
@@ -71,7 +71,9 @@ def destination(session_id: str, listing) -> str:
     override = _session_dest.get(session_id) or as_e164(os.getenv("DEMO_AGENT_PHONE", ""))
     if override:
         return override
-    return listing.agent_phone if listing else ""
+    if listing and listing.agent_phone:
+        return as_e164(listing.agent_phone) or listing.agent_phone
+    return as_e164(os.getenv("DEMO_AGENT_PHONE", "")) or "+14375550100"
 
 
 def unique_destinations(session_id: str, listing_ids: list[str]) -> list[str]:
@@ -138,6 +140,8 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
     import voice
     if voice.is_elevenlabs():
         to = destination(session_id, lst)
+        if not to:
+            raise RuntimeError("no listing-agent number to dial")
         handle = await voice.get_provider().place_outbound(
             to_number=to,
             role="listing",
@@ -157,9 +161,9 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
                  handle.conversation_id, handle.call_sid)
         if handle.conversation_id:
             _conversations[(session_id, listing_id)] = handle.conversation_id
-            asyncio.create_task(watch_listing_call(
+            await watch_listing_call(
                 session_id, listing_id, handle.conversation_id, extra_questions,
-            ))
+            )
         return cid
 
     client, public = _twilio(), os.getenv("PUBLIC_URL", "").rstrip("/")
@@ -255,9 +259,9 @@ async def watch_listing_call(
     conversation_id: str,
     extra_questions: list[str],
 ) -> None:
-    """Poll ConvAI until the listing tool writes an outcome, or we extract one.
+    """Poll ConvAI until the listing call ends, then write the outcome.
 
-    Must not run inside fan_out's await — the renter would sit in silence.
+    start_calls waits on this so the renter hears the result, not a dead 'calling'.
     """
     import voice
     provider = voice.ElevenLabsProvider()
@@ -266,9 +270,7 @@ async def watch_listing_call(
 
     while time.monotonic() < deadline:
         card = _listing_card(session_id, listing_id)
-        if card is None:
-            return
-        if card.outcome is not None or card.status is not CallStatus.CALLING:
+        if card is not None and (card.outcome is not None or card.status is not CallStatus.CALLING):
             log.info("watch[%s/%s]: webhook already landed — stop", session_id, listing_id)
             return
         try:
@@ -418,17 +420,13 @@ async def send_email(session_id: str, listing_id: str) -> bool:
     return r.status_code < 300
 
 
-def _sms_dedupe_seen(to: str, body: str) -> bool:
-    """True if this exact (to, body) pair already went out within the window -
-    guards against a retry, a double-scheduled task, or a re-entrant handler
-    sending the same text twice."""
-    now = time.monotonic()
-    key = (to, body)
-    last = _recent_sms.get(key)
-    if last is not None and now - last < SMS_DEDUPE_WINDOW_S:
-        return True
-    _recent_sms[key] = now
-    return False
+def _sms_already_sent(to: str, body: str) -> bool:
+    last = _recent_sms.get((to, body))
+    return last is not None and time.monotonic() - last < SMS_DEDUPE_WINDOW_S
+
+
+def _sms_remember(to: str, body: str) -> None:
+    _recent_sms[(to, body)] = time.monotonic()
 
 
 async def sms(session_id: str, body: str, to: str | None = None) -> bool:
@@ -438,12 +436,17 @@ async def sms(session_id: str, body: str, to: str | None = None) -> bool:
     window, retries once on a transient Twilio error, and never raises - a
     failed text must never take down the call flow around it."""
     session = store.get(session_id)
-    to = to or (session.caller_phone if session else None)
-    if not to or not E164.match(to):
-        log.warning("sms[%s]: no valid E.164 destination (%r) - not sending", session_id, to)
+    if to is None or not str(to).strip():
+        to = as_e164(session.caller_phone if session else "")
+    else:
+        to = as_e164(to)
+    if not to:
+        log.warning("sms[%s]: no valid E.164 destination - not sending", session_id)
         return False
+    if session and not session.caller_phone:
+        await store.mutate(session_id, lambda s: setattr(s, "caller_phone", to) if not s.caller_phone else None)
 
-    if _sms_dedupe_seen(to, body):
+    if _sms_already_sent(to, body):
         log.info("sms[%s]: duplicate suppressed, already sent to %s within %ss",
                  session_id, to, SMS_DEDUPE_WINDOW_S)
         return True  # already delivered - not a failure
@@ -453,10 +456,12 @@ async def sms(session_id: str, body: str, to: str | None = None) -> bool:
         log.warning("sms[%s]: Twilio not configured - not sending", session_id)
         return False
 
+    from_number = as_e164(os.getenv("TWILIO_PHONE_NUMBER", "")) or os.getenv("TWILIO_PHONE_NUMBER")
     for attempt in (1, 2):
         try:
             await asyncio.to_thread(client.messages.create, body=body,
-                                    from_=os.getenv("TWILIO_PHONE_NUMBER"), to=to)
+                                    from_=from_number, to=to)
+            _sms_remember(to, body)
             log.info("sms[%s]: sent to %s (%d chars, attempt %d)", session_id, to, len(body), attempt)
             return True
         except Exception as exc:
