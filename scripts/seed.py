@@ -25,7 +25,7 @@ from pydantic import ValidationError  # noqa: E402
 from schemas import Listing  # noqa: E402
 
 E164 = re.compile(r"^\+[1-9]\d{7,14}$")
-PLACEHOLDER = re.compile(r"REPLACE|XXX|0000000|555555", re.I)
+PLACEHOLDER = re.compile(r"REPLACE|XXX|0000000|555\d{4}", re.I)  # 555-xxxx = fictional
 RENT_RANGE = (800, 12_000)
 MIN_ROWS = 20
 
@@ -65,6 +65,11 @@ def check(raw: list[dict]) -> tuple[list[Listing], list[str], list[str]]:
         elif PLACEHOLDER.search(listing.agent_phone):
             errors.append(fail(i, "agent_phone", f"still a placeholder: {listing.agent_phone!r}"))
 
+        if not listing.agent_email or "@" not in listing.agent_email:
+            errors.append(fail(i, "agent_email", "missing - the email fallback needs it"))
+        elif PLACEHOLDER.search(listing.agent_email):
+            errors.append(fail(i, "agent_email", "still a placeholder"))
+
         if not listing.photo_url.startswith(("http://", "https://")):
             errors.append(fail(i, "photo_url", "missing or not a URL - the cards need images"))
 
@@ -92,6 +97,9 @@ def summarize(listings: list[Listing]) -> None:
     print("  beds     " + "  ".join(f"{b}br×{n}" for b, n in sorted(beds.items())))
     print(f"  parking  {sum(l.parking_included for l in listings)}/{len(listings)} included")
     print(f"  phones   {len(phones)} distinct teammate numbers")
+    areas = Counter(l.neighbourhood for l in listings)
+    print("  areas    " + ", ".join(f"{a} {n}" for a, n in areas.most_common()))
+    print(f"  photos   {sum(len(l.photos) for l in listings)} total")
 
     if len(listings) < MIN_ROWS:
         print(f"\n{YEL}!{RESET} only {len(listings)} rows - aim for ~50 so the shortlist "
