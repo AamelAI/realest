@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ListingCard } from "./ListingCard";
+import { ListingRow } from "./ListingRow";
 import { usePolling } from "@/lib/usePolling";
 import type { SessionState } from "@/lib/types";
 
@@ -15,8 +15,8 @@ export function Board({
   initial: SessionState;
   live?: boolean;
 }) {
-  // Server-rendered first paint, then the poller takes over. `live={false}`
-  // renders the static template with mock data.
+  // Server-rendered first paint, then the poller takes over.
+  // live={false} renders the static template with mock data.
   const polled = usePolling(live ? sid : "", 1200, initial);
   const state = live ? polled : initial;
 
@@ -24,48 +24,46 @@ export function Board({
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
-  const calling = state.listings.some((l) => l.status === "calling");
-  const prefs = state.preferences;
-  const summary = useMemo(() => {
+  const calling = state.listings.filter((l) => l.status === "calling").length;
+  const p = state.preferences;
+
+  const brief = useMemo(() => {
     const bits: string[] = [];
-    if (prefs.beds) bits.push(`${prefs.beds} bed`);
-    if (prefs.areas?.length) bits.push(prefs.areas.join(" · "));
-    if (prefs.max_rent) bits.push(`under $${prefs.max_rent.toLocaleString("en-CA")}`);
-    if (prefs.parking) bits.push("parking");
-    return bits.join("  ·  ");
-  }, [prefs]);
+    if (p.beds) bits.push(`${p.beds} bed`);
+    if (p.areas?.length) bits.push(p.areas.join(", "));
+    if (p.max_rent) bits.push(`under $${p.max_rent.toLocaleString("en-CA")}`);
+    if (p.parking) bits.push("parking");
+    return bits.join(" · ");
+  }, [p]);
 
   return (
     <div className="min-h-dvh">
-      <header className="sticky top-0 z-20 border-b border-rule bg-paper/85 backdrop-blur-md">
-        <div className="mx-auto max-w-5xl px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex items-baseline justify-between gap-4">
-            <h1 className="font-display text-[17px] font-extrabold tracking-[-0.02em] sm:text-xl">
-              Realest
-            </h1>
-            <span className="eyebrow flex items-center gap-1.5 text-muted">
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  calling ? "dot-live bg-live" : "bg-real"
-                }`}
-              />
-              {calling ? "On the phone" : "Live"}
-            </span>
+      {/* Solid, hairline-ruled. No blur, no floating panel. */}
+      <header className="border-b border-rule bg-paper">
+        <div className="mx-auto max-w-3xl px-5 pb-5 pt-6 sm:px-8 sm:pt-8">
+          <div className="flex items-baseline justify-between gap-6">
+            <h1 className="text-[15px] font-semibold tracking-[-0.01em]">Realest</h1>
+            <p className="font-mono text-[11px] tnum text-muted">
+              {calling > 0
+                ? `${calling} call${calling > 1 ? "s" : ""} in progress`
+                : `${state.listings.length} listings`}
+            </p>
           </div>
 
-          {summary && <p className="mt-1 text-[12.5px] text-muted tnum">{summary}</p>}
+          {brief && (
+            <p className="mt-1 font-mono text-[11.5px] tnum text-muted">{brief}</p>
+          )}
 
-          {/* What the agent last said, so a viewer can follow without audio.
-              initial={false}: present on first paint, animates only on change —
-              a fade-in here leaves a hole in the most important line. */}
+          {/* The agent's last line. Present on first paint; animates only on change. */}
           <AnimatePresence mode="wait" initial={false}>
             {state.agent_says && (
               <motion.p
                 key={state.agent_says}
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="mt-2.5 border-l-2 border-ink pl-3 text-[13px] leading-snug text-ink-2 sm:text-sm"
+                transition={{ duration: 0.18 }}
+                className="mt-4 max-w-[46ch] text-[19px] font-medium leading-[1.3] tracking-[-0.018em] sm:text-[22px]"
               >
                 {state.agent_says}
               </motion.p>
@@ -74,17 +72,18 @@ export function Board({
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 pb-32 pt-4 sm:px-6 sm:pt-6">
+      <main className="mx-auto max-w-3xl px-5 pb-32 sm:px-8">
         {state.listings.length === 0 ? (
-          <p className="py-24 text-center text-sm text-muted">
+          <p className="py-24 text-[15px] text-muted">
             Tell the agent what you&rsquo;re after and your shortlist appears here.
           </p>
         ) : (
-          <motion.div layout className="grid gap-3 md:grid-cols-2 md:gap-4">
-            {state.listings.map((card) => (
-              <ListingCard
+          <motion.div layout>
+            {state.listings.map((card, i) => (
+              <ListingRow
                 key={card.listing_id}
                 card={card}
+                lead={i === 0}
                 selected={selected.includes(card.listing_id)}
                 onToggle={toggle}
               />
@@ -97,28 +96,23 @@ export function Board({
       <AnimatePresence>
         {selected.length > 0 && (
           <motion.div
-            initial={{ y: 80 }}
+            initial={{ y: 90 }}
             animate={{ y: 0 }}
-            exit={{ y: 80 }}
-            transition={{ type: "spring", stiffness: 400, damping: 34 }}
-            className="fixed inset-x-0 bottom-0 z-30 border-t border-rule bg-card/95 backdrop-blur-md"
+            exit={{ y: 90 }}
+            transition={{ type: "spring", stiffness: 420, damping: 36 }}
+            className="fixed inset-x-0 bottom-0 z-30 border-t border-ink bg-paper"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
-            <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-              <div>
-                <p className="font-display text-[15px] font-bold tnum">
-                  {selected.length} selected
-                </p>
-                <p className="text-[12px] text-muted">
-                  We&rsquo;ll ask: still available · real cost · pets
-                </p>
-              </div>
+            <div className="mx-auto flex max-w-3xl items-center justify-between gap-6 px-5 py-4 sm:px-8">
+              <p className="font-mono text-[11.5px] tnum text-ink-2">
+                {selected.length} selected · we&rsquo;ll ask availability, real cost, pets
+              </p>
               <button
                 type="button"
                 // TODO(hackathon): POST selected ids to /agent/start-calls
-                className="rounded-lg bg-ink px-5 py-2.5 font-display text-[14px] font-bold text-paper transition-opacity hover:opacity-85 active:opacity-70"
+                className="shrink-0 bg-ink px-5 py-2.5 text-[14px] font-semibold text-paper transition-opacity hover:opacity-80 active:opacity-65"
               >
-                Call {selected.length === 1 ? "them" : "all " + selected.length}
+                Call {selected.length === 1 ? "them" : `all ${selected.length}`}
               </button>
             </div>
           </motion.div>
