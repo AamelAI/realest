@@ -39,6 +39,7 @@ If a change doesn't serve one of those, it's out of scope today.
 | **Seeded listings only** | No live scraping. A scrape that fails on camera has no recovery |
 | **Don't touch the audio bridge** | `scripts/spike_bridge.py` already handles μ-law, barge-in and streamSid. Build on it, don't rewrite it |
 | **Every listing's `agent_phone` is a teammate's number** | We never cold-call real people with a bot |
+| **UI must not look vibe-coded** | No cards-with-rings, pill badges, all-caps labels, coloured left stripes, backdrop-blur, gradients or Inter. Read `.claude/skills/live-surface/design-rules.md` **before** touching `web/` |
 
 ## Architecture in one paragraph
 
