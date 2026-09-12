@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TODO = ROOT / "TODO.md"
 
 R, Y, G, B, D, X = "\033[31m", "\033[33m", "\033[32m", "\033[34m", "\033[2m", "\033[0m"
-LANE = {"D1": "\033[36m", "D2": "\033[35m", "D3": "\033[33m", "ALL": "\033[37m"}
+LANE = {"D1": "\033[36m", "D2": "\033[35m", "D3": "\033[33m", "D4": "\033[32m", "ALL": "\033[37m"}
 
 STEP_RE = re.compile(r"^## (Step \d+[^\n·]*?)(?: ·.*)?$")
 TASK_RE = re.compile(r"^- `([\d.]+)` \*\*(D\d|ALL)\*\* — (.+?)(?: · \*done when:\* (.+))?$")
@@ -91,7 +91,7 @@ def main() -> int:
         print()
 
     print(f"{D}{'─' * 58}{X}")
-    for lane in ("D1", "D2", "D3"):
+    for lane in ("D1", "D2", "D3", "D4"):
         ts = [t for _, tasks in steps for t in tasks if t[1] == lane]
         d = sum(1 for t in ts if t[0] in done)
         nxt = next((t for t in ts if t[0] not in done), None)
