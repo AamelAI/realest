@@ -1,4 +1,4 @@
-.PHONY: dev tunnel web seed check install help
+.PHONY: dev tunnel web seed check install doctor help
 
 help:
 	@grep -E '^[a-z]+:' Makefile | grep -v '^\.PHONY' | sed 's/:.*//' | sed 's/^/  make /'
@@ -21,3 +21,6 @@ seed:               ## validate + write data/listings.json
 
 check:              ## validate listings without writing
 	uv run python scripts/seed.py --check
+
+doctor:             ## is this machine ready to build?
+	uv run python scripts/doctor.py
