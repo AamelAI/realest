@@ -1,0 +1,64 @@
+{
+  "type": "webhook",
+  "name": "send_sms",
+  "description": "Text the caller the shortlist link. Call this after record_preferences has returned, or when they ask for the link. After it returns, read the speak field aloud. If sent is false, ask for a mobile number with country code and call this again.",
+  "api_schema": {
+    "url": "https://zipping-scarf-actress.ngrok-free.dev/agent/sms",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [],
+    "request_body_schema": {
+      "id": "body",
+      "type": "object",
+      "description": "Where to send the shortlist SMS.",
+      "required": true,
+      "value_type": "llm_prompt",
+      "properties": [
+        {
+          "id": "session_id",
+          "type": "string",
+          "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "value_type": "llm_prompt",
+          "required": false,
+          "enum": null
+        },
+        {
+          "id": "caller_phone",
+          "type": "string",
+          "description": "Caller's mobile in E.164, e.g. +14165551234. Use the number they are calling from if you know it. Omit if unknown.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "value_type": "llm_prompt",
+          "required": false,
+          "enum": null
+        }
+      ]
+    },
+    "request_headers": [],
+    "content_type": "application/json",
+    "auth_connection": null,
+    "response_filter": null
+  },
+  "response_timeout_secs": 20,
+  "follow_redirects": false,
+  "follow_redirects_allowed_domains": [],
+  "dynamic_variables": {
+    "dynamic_variable_placeholders": {}
+  },
+  "assignments": [
+    {
+      "source": "response",
+      "dynamic_variable": "session_id",
+      "value_path": "session_id"
+    }
+  ],
+  "interruption_mode": "allow",
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "tool_error_handling_mode": "auto",
+  "response_mocks": []
+}

@@ -17,11 +17,11 @@
         {
           "id": "session_id",
           "type": "string",
-          "description": "Pass {{session_id}}. Never invent it.",
-          "dynamic_variable": "session_id",
+          "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it.",
+          "dynamic_variable": "",
           "constant_value": "",
-          "value_type": "dynamic_variable",
-          "required": true,
+          "value_type": "llm_prompt",
+          "required": false,
           "enum": null
         },
         {
@@ -48,14 +48,17 @@
     },
     "request_headers": [],
     "content_type": "application/json",
-    "auth_connection": null
+    "auth_connection": null,
+    "response_filter": null
   },
   "response_timeout_secs": 20,
+  "follow_redirects": false,
+  "follow_redirects_allowed_domains": [],
   "dynamic_variables": {
     "dynamic_variable_placeholders": {}
   },
   "assignments": [],
-  "disable_interruptions": false,
+  "interruption_mode": "allow",
   "pre_tool_speech": "auto",
   "tool_call_sound": null,
   "tool_call_sound_behavior": "auto",
