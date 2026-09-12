@@ -132,26 +132,37 @@ async def extract_outcome(transcript: str, extra_questions: list[str]) -> CallOu
     destroys the claim the entire submission rests on.
     """
     client = _openai()
-    if client is None or not transcript.strip():
-        # Degraded path (no key, or nothing to parse): still never leave
-        # `source` empty - 2.1's own acceptance criterion is "source always
-        # set", not just "set when the model happens to be available".
+
+    def _degraded() -> CallOutcome:
+        # No key, nothing to parse, or the API call itself failed: still never
+        # leave `source` empty - 2.1's own acceptance criterion is "source
+        # always set", not just "set when the model happens to cooperate".
         return CallOutcome(raw_transcript=transcript,
                            source=datetime.now().strftime("agent, %-I:%M%p").lower())
 
+    if client is None or not transcript.strip():
+        return _degraded()
+
     asked = "; ".join(extra_questions) or "none"
-    r = await client.responses.parse(
-        model="gpt-4.1-mini",
-        input=[
-            {"role": "system", "content":
-             "Extract ONLY what the listing agent actually said in this phone call. "
-             "If they did not mention something, leave it null or empty - never guess. "
-             f"The caller also asked us to find out: {asked}. "
-             "Set `source` to who said it and when, e.g. 'Mark, 1:42pm'."},
-            {"role": "user", "content": transcript},
-        ],
-        text_format=CallOutcome,
-    )
+    try:
+        r = await client.responses.parse(
+            model="gpt-4.1-mini",
+            input=[
+                {"role": "system", "content":
+                 "Extract ONLY what the listing agent actually said in this phone call. "
+                 "If they did not mention something, leave it null or empty - never guess. "
+                 f"The caller also asked us to find out: {asked}. "
+                 "Set `source` to who said it and when, e.g. 'Mark, 1:42pm'."},
+                {"role": "user", "content": transcript},
+            ],
+            text_format=CallOutcome,
+        )
+    except Exception as exc:
+        # A bad/expired/rate-limited key must degrade the same way a missing
+        # one does, never crash the call that's landing this outcome.
+        log.warning("extract_outcome: OpenAI call failed (%s) - falling back to raw transcript", exc)
+        return _degraded()
+
     oc = r.output_parsed or CallOutcome()
     oc.raw_transcript = transcript
     if not oc.source:
