@@ -72,16 +72,17 @@ docs/      architecture, sponsors
 ## Setup
 
 ```bash
-cp .env.example .env          # fill in keys
-python -m venv .venv && source .venv/bin/activate
-pip install -r server/requirements.txt
-uvicorn server.main:app --reload --port 8000
-ngrok http 8000               # put the URL into agent/tools.json
+cp .env.example .env    # fill in keys
+make install            # uv sync + npm install
+make seed               # validate data/listings.json
+make dev                # FastAPI on :8000
+make tunnel             # ngrok — put the URL into agent/tools.json
+make web                # Next.js on :3000
 ```
 
-```bash
-cd web && npm install && npm run dev
-```
+Requires [`uv`](https://docs.astral.sh/uv/) and `ngrok`. Python is pinned to 3.12 in `.python-version`.
+
+**Intel Mac note:** `cryptography` is pinned `<47` in `pyproject.toml` — newer releases ship no macOS x86_64 wheel and fall back to a Rust source build that fails. Don't relax that pin today.
 
 Copy `data/listings.sample.json` to `data/listings.json` and expand to ~50 rows. **Every `agent_phone` must be a teammate's real number** — we never cold-call strangers with a bot.
 
