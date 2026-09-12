@@ -24,6 +24,12 @@ REQUIRED_KEYS = [
     "TWILIO_PHONE_NUMBER", "PUBLIC_URL", "WEB_URL",
 ]
 NICE_KEYS = ["OPENROUTER_API_KEY", "EXA_API_KEY", "RESEND_API_KEY"]
+ELEVENLABS_KEYS = [
+    "ELEVENLABS_API_KEY",
+    "ELEVENLABS_PHONE_NUMBER_ID",
+    "ELEVENLABS_RENTER_AGENT_ID",
+    "ELEVENLABS_LISTING_AGENT_ID",
+]
 
 
 def tool(name: str, fix: str) -> bool:
@@ -90,6 +96,19 @@ def main() -> int:
         absent = [k for k in NICE_KEYS if not vals.get(k)]
         if absent:
             meh(f"optional keys unset: {', '.join(absent)}", "fine for now, needed for P2")
+        el_missing = [k for k in ELEVENLABS_KEYS if not vals.get(k)]
+        if vals.get("VOICE_PROVIDER", "openai_realtime") == "elevenlabs":
+            if el_missing:
+                bad(f"VOICE_PROVIDER=elevenlabs but missing {', '.join(el_missing)}",
+                    "fill the ELEVENLABS_* keys — see docs/ELEVENLABS.md")
+                fails += 1
+            else:
+                ok("ElevenLabs voice keys set")
+        elif el_missing:
+            meh(f"ElevenLabs keys unset: {', '.join(el_missing)}",
+                "needed when you switch voice — docs/ELEVENLABS.md")
+        else:
+            ok("ElevenLabs keys present (VOICE_PROVIDER still openai_realtime)")
         if vals.get("PUBLIC_URL", "").startswith("https://your-"):
             bad("PUBLIC_URL is still the placeholder",
                 "set it to your ngrok URL and paste that into agent/tools.json")
