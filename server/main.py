@@ -9,7 +9,9 @@ You can build and test ~90% of this with curl, no phone involved. Do that.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import secrets
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -19,6 +21,8 @@ import calls
 import listings as L
 import state as store
 from schemas import CallOutcome, CallStatus, Preferences
+
+log = logging.getLogger("realest.main")
 
 load_dotenv()
 
@@ -118,16 +122,53 @@ async def rerank(session_id: str, says: str | None = None, shortlist: bool = Tru
 
 # ── writing: every voice tool lands on one of these ──────────────────────────
 
+def _nested_get(payload: dict, *keys: str) -> str:
+    """First non-empty string among top-level keys or common ElevenLabs wrappers."""
+    wrappers = [payload]
+    for wrap in ("data", "conversation_initiation_client_data", "dynamic_variables"):
+        inner = payload.get(wrap)
+        if isinstance(inner, dict):
+            wrappers.append(inner)
+    for block in wrappers:
+        for key in keys:
+            val = block.get(key)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+    return ""
+
+
+def _ensure_session(payload: dict) -> str:
+    """Stable session id for webhook tools. Never invent listing facts here."""
+    sid = _nested_get(payload, "session_id")
+    if not sid:
+        sid = _nested_get(payload, "conversation_id")
+    if not sid:
+        sid = secrets.token_urlsafe(6)
+        log.info("session minted %s", sid)
+    return sid
+
+
+def _apply_caller(payload: dict) -> str:
+    phone = _nested_get(payload, "caller_phone", "From", "from_number", "user_id")
+    return phone if phone and calls.E164.match(phone) else ""
+
+
 @app.post("/agent/preferences")
 async def agent_preferences(payload: dict):
     """Caller described what they want, or reprioritized. Re-rank, speak one line."""
-    sid = payload.get("session_id", "demo")
+    sid = _ensure_session(payload)
+    first = store.get(sid) is None
     fields = {k: v for k, v in payload.items() if k in Preferences.model_fields and v is not None}
+    phone = _apply_caller(payload)
 
     def write(s):
         s.preferences = s.preferences.model_copy(update=fields)
+        if phone and not s.caller_phone:
+            s.caller_phone = phone
 
     await store.mutate(sid, write)
+    if first:
+        asyncio.create_task(calls.sms_if_call_alive(sid, f"{WEB_URL}/s/{sid}"))
     s = await rerank(sid, says="")
     n = len(s.listings)
     top = L.by_id(s.listings[0].listing_id).address.split(",")[0] if n else ""
@@ -142,8 +183,8 @@ async def agent_preferences(payload: dict):
          "address": (L.by_id(st.listing_id).address if L.by_id(st.listing_id) else "")}
         for st in s.listings
     ]
-    return {"speak": spoken, "count": n, "link": f"{WEB_URL}/s/{sid}",
-            "shortlist": shortlist}
+    return {"speak": spoken, "session_id": sid, "count": n,
+            "link": f"{WEB_URL}/s/{sid}", "shortlist": shortlist}
 
 
 def _resolve_ids(raw: list, session_id: str) -> list[str]:
@@ -173,22 +214,41 @@ def _resolve_ids(raw: list, session_id: str) -> list[str]:
     return out or known
 
 
+def _resolve_listing_id(payload: dict, session_id: str) -> str:
+    raw = _nested_get(payload, "listing_id")
+    if raw and L.by_id(raw):
+        return raw
+    if raw:
+        found = _resolve_ids([raw], session_id)
+        if found:
+            return found[0]
+    addr = _nested_get(payload, "address")
+    if addr:
+        found = _resolve_ids([addr], session_id)
+        if found:
+            return found[0]
+    return ""
+
+
 @app.post("/agent/start-calls")
 async def agent_start_calls(payload: dict):
     """Verify these listings. Fan out. Cards flip to CALLING before any await."""
-    sid = payload.get("session_id", "demo")
+    sid = _ensure_session(payload)
     ids = _resolve_ids(payload.get("listing_ids") or [], sid)
     extra = payload.get("extra_questions") or []
+    phone = _apply_caller(payload)
 
     if not calls.within_business_hours():
         spoken = calls.OUT_OF_HOURS
         await store.mutate(sid, lambda s: setattr(s, "agent_says", spoken))
         await calls.email_all(sid, ids, extra)
-        return {"speak": spoken, "called": 0, "emailed": len(ids)}
+        return {"speak": spoken, "session_id": sid, "called": 0, "emailed": len(ids)}
 
     def write(s):
         if extra:
             s.preferences.extra_questions = extra
+        if phone and not s.caller_phone:
+            s.caller_phone = phone
         for st in s.listings:
             if st.listing_id in ids:
                 st.status = CallStatus.CALLING
@@ -198,33 +258,42 @@ async def agent_start_calls(payload: dict):
     await store.mutate(sid, write)
     await store.mutate(sid, lambda s: setattr(s, "agent_says", spoken))
     await calls.fan_out(sid, ids, extra)
-    return {"speak": spoken, "called": n}
+    return {"speak": spoken, "session_id": sid, "called": n}
 
 
 @app.post("/agent/outcome")
 async def agent_outcome(payload: dict):
     """A listing agent told us something. Write it, then RE-RANK THE WHOLE LIST."""
-    sid = payload.get("session_id", "demo")
-    lid = payload.get("listing_id", "")
+    sid = _ensure_session(payload)
+    lid = _resolve_listing_id(payload, sid)
+    log.info("outcome[%s] listing=%s", sid, lid or "?")
+    if not lid:
+        return {"speak": "Got it.", "session_id": sid}
+
+    s = store.get(sid)
+    existing = next((st for st in (s.listings if s else []) if st.listing_id == lid), None)
+    if existing and existing.outcome is not None:
+        return {"speak": "Got it.", "session_id": sid, "agent_says": s.agent_says if s else ""}
+
     oc = CallOutcome(**{k: v for k, v in payload.items()
                         if k in CallOutcome.model_fields and v is not None})
 
-    def write(s):
-        for st in s.listings:
+    def write(st_):
+        for st in st_.listings:
             if st.listing_id == lid:
                 L.apply_outcome(st, oc)
 
     async with _outcome_lock:
         await store.mutate(sid, write)
         s = await rerank(sid)
-    return {"speak": "Got it, thanks.", "agent_says": s.agent_says}
+    return {"speak": "Got it, thanks.", "session_id": sid, "agent_says": s.agent_says}
 
 
 @app.post("/agent/book")
 async def agent_book(payload: dict):
     """Plain code does the write - the model only calls this."""
-    sid = payload.get("session_id", "demo")
-    lid = payload.get("listing_id", "")
+    sid = _ensure_session(payload)
+    lid = _resolve_listing_id(payload, sid)
     slot = payload.get("slot", "")
     lst = L.by_id(lid)
     where = lst.address.split(",")[0] if lst else "it"
@@ -240,16 +309,16 @@ async def agent_book(payload: dict):
 
     await store.mutate(sid, write)
     await calls.sms(sid, f"Confirmed: {where}, {slot}. {WEB_URL}/s/{sid}")
-    return {"speak": spoken}
+    return {"speak": spoken, "session_id": sid}
 
 
 @app.post("/agent/email")
 async def agent_email(payload: dict):
     """Caller tapped Send on a drafted email. Plain code, no model in the loop."""
-    sid = payload.get("session_id", "demo")
-    lid = payload.get("listing_id", "")
+    sid = _ensure_session(payload)
+    lid = _resolve_listing_id(payload, sid)
     sent = await calls.send_email(sid, lid)
-    return {"sent": sent}
+    return {"sent": sent, "session_id": sid}
 
 
 # The voice layer: TwiML + the media websocket, mounted on this same app so a
