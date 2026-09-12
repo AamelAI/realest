@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Realest — design tokens
+
+   One idea: status is the only colour. Everything else is paper and ink.
+   The page's job is to make "this one is dead, this one lied about the
+   price, this one is real" legible in a glance, from across a room, on a
+   phone held next to someone's ear.
+
+   Every token is declared here in :root first. Dark redefines values only —
+   never introduce a colour that exists solely inside a media block.
+   ───────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-paper: #f4f4f1;
+  --color-card: #ffffff;
+  --color-sunk: #ecece7;
+  --color-ink: #14160f;
+  --color-ink-2: #43473c;
+  --color-muted: #767a6d;
+  --color-rule: #e0e1da;
+  --color-hair: #eceee6;
+
+  /* status — the only saturated colour on the page */
+  --color-live: #b4630c;
+  --color-live-bg: #fbefdf;
+  --color-real: #146c43;
+  --color-real-bg: #e2f1e8;
+  --color-gone: #a52222;
+  --color-gone-bg: #f8e6e4;
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-public), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-paper: #0e100c;
+    --color-card: #171a14;
+    --color-sunk: #1f231b;
+    --color-ink: #edefe6;
+    --color-ink-2: #b9bdaf;
+    --color-muted: #82877a;
+    --color-rule: #2a2e25;
+    --color-hair: #22261e;
+
+    --color-live: #e6a45c;
+    --color-live-bg: #2b1f10;
+    --color-real: #5fc08c;
+    --color-real-bg: #12251a;
+    --color-gone: #e88b83;
+    --color-gone-bg: #2a1614;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-paper: #0e100c;
+  --color-card: #171a14;
+  --color-sunk: #1f231b;
+  --color-ink: #edefe6;
+  --color-ink-2: #b9bdaf;
+  --color-muted: #82877a;
+  --color-rule: #2a2e25;
+  --color-hair: #22261e;
+
+  --color-live: #e6a45c;
+  --color-live-bg: #2b1f10;
+  --color-real: #5fc08c;
+  --color-real-bg: #12251a;
+  --color-gone: #e88b83;
+  --color-gone-bg: #2a1614;
+}
+
+html {
+  background: var(--color-paper);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* iOS: page opens one-handed next to an ear; keep it clear of the notch */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Digits must line up between polls or the cards look like they twitch. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.82); }
+}
+.dot-live { animation: pulse-dot 1.15s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: 2px;
+}

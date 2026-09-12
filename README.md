@@ -82,6 +82,8 @@ make tunnel             # ngrok — put the URL into agent/tools.json
 make web                # Next.js on :3000
 ```
 
+Preview the page template: `make web`, then open `http://localhost:3000`.
+
 Then `make doctor` — it tells each machine exactly what's still missing.
 
 Requires [`uv`](https://docs.astral.sh/uv/), `node` and `ngrok`. Python is pinned to 3.12 in `.python-version`.
