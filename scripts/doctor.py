@@ -20,9 +20,8 @@ bad = lambda m, fix: print(f"{R}✗{X} {m}\n  {D}→ {fix}{X}")
 meh = lambda m, fix: print(f"{Y}!{X} {m}\n  {D}→ {fix}{X}")
 
 REQUIRED_KEYS = [
-    "VOICE_API_KEY", "VOICE_RENTER_AGENT_ID", "VOICE_LISTING_AGENT_ID",
-    "VOICE_PHONE_NUMBER_ID", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
-    "TWILIO_PHONE_NUMBER", "OPENAI_API_KEY", "PUBLIC_URL", "WEB_URL",
+    "OPENAI_API_KEY", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
+    "TWILIO_PHONE_NUMBER", "PUBLIC_URL", "WEB_URL",
 ]
 NICE_KEYS = ["OPENROUTER_API_KEY", "EXA_API_KEY", "RESEND_API_KEY"]
 
@@ -99,10 +98,14 @@ def main() -> int:
         else:
             ok(f"{len(rows)} listings, {len(phones)} distinct numbers")
 
-    tools_json = ROOT / "agent" / "tools.json"
-    if "REPLACE_WITH_NGROK" in tools_json.read_text():
-        meh("agent/tools.json still has REPLACE_WITH_NGROK",
-            "swap in your ngrok URL, then re-sync tools in the provider dashboard")
+    pub = (vals.get("PUBLIC_URL", "") if env.exists() else "")
+    if pub and not pub.startswith("https://your-"):
+        try:
+            import urllib.request
+            urllib.request.urlopen(pub + "/health", timeout=6)
+            ok(f"bridge reachable at {pub}")
+        except Exception:
+            meh(f"{pub}/health unreachable", "start `make bridge` and `make tunnel`")
 
     if (ROOT / "web" / "node_modules").exists():
         ok("web deps installed")

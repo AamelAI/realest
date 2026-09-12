@@ -1404,6 +1404,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "twilio" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -1423,6 +1424,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "twilio", specifier = ">=9.3" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+    { name = "websockets", specifier = ">=16.1.1" },
 ]
 
 [package.metadata.requires-dev]

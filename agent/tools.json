@@ -1,92 +1,68 @@
-[
-  {
-    "type": "webhook",
-    "name": "record_preferences",
-    "description": "Call this as soon as the caller has described what they are looking for - bedrooms, neighbourhoods, budget, parking, pets. Call it AGAIN any time they change or reprioritize what matters to them. Do not wait until the end of the conversation.",
-    "api_schema": {
-      "url": "REPLACE_WITH_NGROK/agent/preferences",
-      "method": "POST",
-      "request_headers": { "Content-Type": "application/json" },
-      "request_body_schema": {
+{
+  "_note": "OpenAI Realtime function tools. Sent in session.update when a call's websocket opens (see scripts/spike_bridge.py). The model emits response.function_call_arguments.done; the bridge calls the matching Python function IN-PROCESS and replies with conversation.item.create / function_call_output. No HTTP webhooks, no dashboard, no URLs to rewrite.",
+  "_renter_agent": ["record_preferences", "start_calls", "book_viewing"],
+  "_listing_agent": ["record_outcome"],
+  "tools": [
+    {
+      "type": "function",
+      "name": "record_preferences",
+      "description": "Call this as soon as the caller has described what they're looking for - bedrooms, neighbourhoods, budget, parking, pets. Call it AGAIN any time they change or reprioritize what matters. Do not wait until the end of the conversation.",
+      "parameters": {
         "type": "object",
         "properties": {
-          "session_id": { "type": "string", "description": "Session id from dynamic variables." },
           "beds": { "type": "integer", "description": "Bedrooms wanted." },
           "baths": { "type": "integer", "description": "Bathrooms wanted." },
-          "areas": { "type": "array", "items": { "type": "string" }, "description": "Neighbourhoods, e.g. King West." },
+          "areas": { "type": "array", "items": { "type": "string" }, "description": "Neighbourhoods, e.g. King West, Liberty Village." },
           "max_rent": { "type": "integer", "description": "Maximum monthly rent in CAD." },
           "parking": { "type": "boolean", "description": "True if they need parking." },
           "pets": { "type": "string", "description": "dog, cat, or none." },
-          "priority_order": { "type": "array", "items": { "type": "string" }, "description": "What matters most FIRST, e.g. [transit, price, parking]. Update whenever they reprioritize." }
+          "priority_order": { "type": "array", "items": { "type": "string" }, "description": "What matters most FIRST, e.g. [transit, price, parking]. Update whenever they reprioritize - this drives the re-rank." }
         },
-        "required": ["session_id"]
-      },
-      "content_type": "application/json"
-    }
-  },
-  {
-    "type": "webhook",
-    "name": "start_calls",
-    "description": "Call this when the caller has confirmed which listings they want verified. Before calling it, ask them if there is anything else they want asked on the call.",
-    "api_schema": {
-      "url": "REPLACE_WITH_NGROK/agent/start-calls",
-      "method": "POST",
-      "request_headers": { "Content-Type": "application/json" },
-      "request_body_schema": {
+        "required": []
+      }
+    },
+    {
+      "type": "function",
+      "name": "start_calls",
+      "description": "Call this when the caller has confirmed which listings they want verified. BEFORE calling it, always ask whether there is anything else they want asked on the call.",
+      "parameters": {
         "type": "object",
         "properties": {
-          "session_id": { "type": "string", "description": "Session id from dynamic variables." },
-          "listing_ids": { "type": "array", "items": { "type": "string" }, "description": "Listings to verify." },
+          "listing_ids": { "type": "array", "items": { "type": "string" }, "description": "Listings to verify, e.g. [L061, L003]." },
           "extra_questions": { "type": "array", "items": { "type": "string" }, "description": "Anything extra the caller asked us to find out." }
         },
-        "required": ["session_id", "listing_ids"]
-      },
-      "content_type": "application/json"
-    }
-  },
-  {
-    "type": "webhook",
-    "name": "book_viewing",
-    "description": "Call this when the caller confirms a specific viewing slot on a specific listing.",
-    "api_schema": {
-      "url": "REPLACE_WITH_NGROK/agent/book",
-      "method": "POST",
-      "request_headers": { "Content-Type": "application/json" },
-      "request_body_schema": {
+        "required": ["listing_ids"]
+      }
+    },
+    {
+      "type": "function",
+      "name": "book_viewing",
+      "description": "Call this when the caller confirms a specific viewing slot on a specific listing.",
+      "parameters": {
         "type": "object",
         "properties": {
-          "session_id": { "type": "string", "description": "Session id from dynamic variables." },
           "listing_id": { "type": "string", "description": "Listing to book." },
           "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." }
         },
-        "required": ["session_id", "listing_id", "slot"]
-      },
-      "content_type": "application/json"
-    }
-  },
-  {
-    "type": "webhook",
-    "name": "record_outcome",
-    "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - leave it out otherwise. Never guess.",
-    "api_schema": {
-      "url": "REPLACE_WITH_NGROK/agent/outcome",
-      "method": "POST",
-      "request_headers": { "Content-Type": "application/json" },
-      "request_body_schema": {
+        "required": ["listing_id", "slot"]
+      }
+    },
+    {
+      "type": "function",
+      "name": "record_outcome",
+      "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess: the entire product rests on these facts having come from a human.",
+      "parameters": {
         "type": "object",
         "properties": {
-          "session_id": { "type": "string", "description": "From dynamic variables." },
-          "listing_id": { "type": "string", "description": "From dynamic variables." },
           "available": { "type": "boolean", "description": "Is the unit still available?" },
-          "addons": { "type": "array", "items": { "type": "string" }, "description": "Mandatory extra costs, e.g. parking $180." },
+          "addons": { "type": "array", "items": { "type": "string" }, "description": "Mandatory extra costs, e.g. parking $180, locker $40." },
           "pets_allowed": { "type": "string", "description": "Exactly what they said about pets." },
           "viewing_slot": { "type": "string", "description": "Slot offered, if any." },
           "answers": { "type": "string", "description": "Answers to the caller's extra questions." },
           "source": { "type": "string", "description": "Who said it and when, e.g. Mark, 1:42pm." }
         },
-        "required": ["session_id", "listing_id"]
-      },
-      "content_type": "application/json"
+        "required": []
+      }
     }
-  }
-]
+  ]
+}

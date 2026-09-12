@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
-"""Connectivity spike: can we place a phone call at all?
+"""Place one outbound call through Twilio, bridged to OpenAI Realtime.
 
-    make spike TO=+14165551234
+    make spike TO=+14165551234              # listing-agent voice (the differentiator)
+    make spike TO=+14165551234 ROLE=renter  # renter-facing voice
 
-This is a setup check, like doctor.py - not product code. It proves the Twilio
-number, the provider account, the agent and the phone number import are all
-wired together. The real call orchestration (fan-out, timeouts, CallOutcome
-extraction, re-ranking) is built during the event in server/calls.py.
+Setup check, like doctor.py - not product code. It proves the Twilio number,
+the tunnel, the bridge and your OpenAI key are all wired together. The real
+orchestration (fan-out, timeouts, CallOutcome, re-ranking) is built during the
+event in server/calls.py.
 
-Run it the moment you have keys. Until your own phone rings, nothing else in
-the telephony lane matters.
+Requires scripts/spike_bridge.py running and `make tunnel` up.
 """
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -22,17 +21,13 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
+from twilio.rest import Client
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-R, Y, G, D, X = "\033[31m", "\033[33m", "\033[32m", "\033[2m", "\033[0m"
+R, G, D, X = "\033[31m", "\033[32m", "\033[2m", "\033[0m"
 E164 = re.compile(r"^\+[1-9]\d{7,14}$")
-
-# ElevenLabs Conversational AI. Vapi/Retell differ only in URL and payload keys -
-# the shape (one POST, agent id + number id + destination) is the same everywhere.
-OUTBOUND_URL = "https://api.elevenlabs.io/v1/convai/twilio/outbound-call"
-CONVERSATION_URL = "https://api.elevenlabs.io/v1/convai/conversations/{cid}"
 
 
 def need(key: str) -> str:
@@ -46,68 +41,45 @@ def need(key: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Place one test call")
     ap.add_argument("--to", required=True, help="your own phone, E.164, e.g. +14165551234")
-    ap.add_argument("--agent", default="renter", choices=["renter", "listing"])
-    ap.add_argument("--status", metavar="CONVERSATION_ID",
-                    help="skip the call, just fetch status + transcript for this id")
+    ap.add_argument("--role", default="listing", choices=["listing", "renter"])
     args = ap.parse_args()
-
-    api_key = need("VOICE_API_KEY")
-    headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
-
-    if args.status:
-        with httpx.Client(timeout=20) as c:
-            r = c.get(CONVERSATION_URL.format(cid=args.status), headers=headers)
-        print(json.dumps(r.json(), indent=2)[:3000])
-        return 0 if r.status_code == 200 else 1
 
     if not E164.match(args.to):
         print(f"{R}✗{X} --to must be E.164 (e.g. +14165551234), got {args.to!r}")
         return 1
 
-    agent_id = need("VOICE_RENTER_AGENT_ID" if args.agent == "renter" else "VOICE_LISTING_AGENT_ID")
-    number_id = need("VOICE_PHONE_NUMBER_ID")
+    sid, token = need("TWILIO_ACCOUNT_SID"), need("TWILIO_AUTH_TOKEN")
+    from_ = need("TWILIO_PHONE_NUMBER")
+    public = need("PUBLIC_URL").rstrip("/")
 
-    payload = {
-        "agent_id": agent_id,
-        "agent_phone_number_id": number_id,
-        "to_number": args.to,
-        # These come back on the outcome webhook and are how you know which card
-        # to update. Getting them wrong means three calls writing to one listing.
-        "conversation_initiation_client_data": {
-            "dynamic_variables": {
-                "session_id": "spike",
-                "listing_id": "L001",
-                "listing_address": "25 Ordnance Street",
-                "listed_rent": "2495",
-                "extra_questions": "is there a locker",
-            }
-        },
-    }
-
-    print(f"{D}→ {args.agent} agent calling {args.to}…{X}")
+    # The bridge has to be reachable before Twilio tries. Fail here, not mid-call.
     try:
-        with httpx.Client(timeout=30) as c:
-            r = c.post(OUTBOUND_URL, headers=headers, json=payload)
-    except httpx.HTTPError as exc:
-        print(f"{R}✗{X} request failed: {exc}")
+        r = httpx.get(f"{public}/health", timeout=8)
+        r.raise_for_status()
+        print(f"{D}  bridge ok · model {r.json().get('model')}{X}")
+    except Exception as exc:
+        print(f"{R}✗{X} {public}/health unreachable: {exc}")
+        print(f"{D}  → is `make bridge` running, and `make tunnel` up on the same port?{X}")
         return 1
 
-    if r.status_code != 200:
-        print(f"{R}✗{X} HTTP {r.status_code}\n{r.text[:600]}")
-        print(f"\n{D}Common causes:{X}")
-        print(f"{D}  401/403  wrong VOICE_API_KEY{X}")
-        print(f"{D}  404      wrong agent id or phone number id{X}")
-        print(f"{D}  400      number not imported provider-side, or --to not verified{X}")
-        print(f"{D}           on a Twilio trial (verify it in the Twilio console){X}")
+    try:
+        call = Client(sid, token).calls.create(
+            to=args.to, from_=from_, url=f"{public}/twiml/{args.role}"
+        )
+    except Exception as exc:
+        msg = str(exc)
+        print(f"{R}✗{X} {msg[:400]}")
+        if "21219" in msg or "unverified" in msg.lower():
+            print(f"{D}  → trial accounts only call VERIFIED numbers.{X}")
+            print(f"{D}    Twilio Console → Phone Numbers → Verified Caller IDs{X}")
+        elif "21606" in msg or "21210" in msg:
+            print(f"{D}  → TWILIO_PHONE_NUMBER isn't a voice-capable number on this account{X}")
         return 1
 
-    data = r.json()
-    cid = data.get("conversation_id", "")
-    print(f"{G}✓{X} call placed")
-    print(f"  conversation  {cid}")
-    print(f"  call sid      {data.get('callSid', '—')}")
-    print(f"\n{D}Your phone should ring. Say something that would fire a tool.{X}")
-    print(f"{D}Then: uv run python scripts/spike_call.py --to {args.to} --status {cid}{X}")
+    print(f"{G}✓{X} call placed · sid {call.sid} · {args.role} voice")
+    print(f"\n{D}Your phone should ring and the agent should speak first.{X}")
+    print(f"{D}Interrupt it mid-sentence - it must stop talking. That's barge-in working.{X}")
+    print(f"{D}Transcripts print in the bridge terminal.{X}")
     return 0
 
 

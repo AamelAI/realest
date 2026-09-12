@@ -16,6 +16,7 @@ dependencies = [
     "openai>=1.54",
     "openai-agents>=0.14",
     "exa-py>=1.7",
+    "websockets>=16.1.1",
 ]
 
 [dependency-groups]

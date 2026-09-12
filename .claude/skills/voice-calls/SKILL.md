@@ -1,39 +1,33 @@
 ---
 name: voice-calls
-description: Wiring the managed voice agent, placing outbound calls, defining webhook tools, and fanning out three calls at once. Use when working on server/calls.py, agent/tools.json, telephony setup, SMS, or anything involving the phone.
+description: Wiring the OpenAI Realtime voice agents over Twilio, placing outbound calls, defining function tools, and fanning out three calls at once. Use when working on server/calls.py, agent/tools.json, telephony setup, SMS, or anything involving the phone.
 ---
 
 # Voice and calls
 
 ## Read this first
 
-**Do not build an audio pipeline.** No media-stream websockets, no μ-law encoding, no barge-in handling. A managed conversational-telephony provider owns all of that, and it is the single biggest time sink you can avoid today.
+**The audio bridge already exists and is already proven — `scripts/spike_bridge.py`.** It handles the three things that break: G.711 μ-law format both directions, barge-in (clear Twilio's buffer *and* truncate the assistant item), and `streamSid` on every outgoing frame.
 
-SITE COBRA took 3rd place at AI Tinkerers Poland with a telephony layer of **182 lines and one HTTP POST**. Their source is the reference implementation for this section: [`voicebotcall/main.py`](https://github.com/PiotrTyrakowski/DeepMindHackaton/blob/main/voicebotcall/main.py) and [`elevenlabs-tools.json`](https://github.com/PiotrTyrakowski/DeepMindHackaton/blob/main/elevenlabs-tools.json).
+**Build on it. Do not rewrite it, and do not debug it during the build.** It was written and tested before the event precisely so that build-day time goes to the product instead of to audio.
+
+Calls run on **OpenAI Realtime over Twilio Media Streams** — marquee sponsor, event credits, no third-party voice vendor and nothing out of pocket. Reference: Twilio's official Python samples for inbound and outbound.
 
 ## Placing an outbound call
 
-One POST. The provider dials, runs the conversation, and calls our webhooks when it needs something.
+Twilio dials; its TwiML points at our websocket; the bridge proxies audio to OpenAI.
 
 ```python
-payload = {
-    "agent_id": AGENT_ID,
-    "agent_phone_number_id": PHONE_NUMBER_ID,
-    "to_number": listing.agent_phone,          # E.164, e.g. "+14165550123"
-    "conversation_initiation_client_data": {
-        "dynamic_variables": {
-            "listing_address": listing.address,
-            "listed_rent": str(listing.rent),
-            "extra_questions": "; ".join(prefs.extra_questions),
-            "session_id": session_id,           # so the outcome webhook knows where to write
-        }
-    },
-}
-resp = await client.post(OUTBOUND_URL, headers=headers, json=payload, timeout=30)
-conversation_id = resp.json()["conversation_id"]
+call = twilio.calls.create(
+    to=listing.agent_phone,                    # E.164, always a teammate's number
+    from_=TWILIO_PHONE_NUMBER,
+    url=f"{PUBLIC_URL}/twiml/listing?session={session_id}&listing={listing.listing_id}",
+)
 ```
 
-**Pass `session_id` and `listing_id` as dynamic variables.** They come back on the outcome webhook and are how you know which card to update. Getting this wrong means three calls all writing to the same card.
+**Carry `session_id` and `listing_id` in the TwiML query string.** Twilio passes them through to the websocket handler, and they are how you know which card an outcome belongs to. Get this wrong and three concurrent calls all write to one listing.
+
+Per-call context (address, listed rent, the caller's extra questions) goes into the Realtime `session.update` instructions when that call's websocket opens — see `spike_bridge.py`.
 
 ## Three calls at once
 
@@ -49,36 +43,28 @@ results = await asyncio.gather(
 - Wrap each call in `asyncio.wait_for(..., timeout=90)`. A call that never resolves hangs the demo.
 - On timeout or exception → status `NO_ANSWER` → draft the email. Never leave a card spinning.
 
-## Webhook tools
+## Tools are in-process, not webhooks
 
-The agent's tools are HTTP webhooks declared in `agent/tools.json` and registered in the provider dashboard. The **description field is the prompt** — it's what the model reads to decide when to call the tool. Write it like you're briefing a person.
+Realtime function tools are declared in `session.update` when the call's websocket opens. The model emits `response.function_call_arguments.done`; the bridge calls the matching Python function **directly** and replies with a `function_call_output`. No HTTP hop, no dashboard, no URLs to keep in sync.
 
-```json
-{
-  "type": "webhook",
-  "name": "record_preferences",
-  "description": "Call this as soon as the caller has described what they're looking for — bedrooms, neighbourhoods, budget, parking, pets. Call it again any time they change or reprioritize what matters. Do not wait until the end of the conversation.",
-  "api_schema": {
-    "url": "https://<ngrok>/agent/preferences",
-    "method": "POST",
-    "request_headers": { "Content-Type": "application/json" },
-    "request_body_schema": {
-      "type": "object",
-      "properties": {
-        "session_id": { "type": "string", "description": "The session id from dynamic variables." },
-        "beds": { "type": "integer", "description": "Number of bedrooms wanted." },
-        "max_rent": { "type": "integer", "description": "Maximum monthly rent in CAD." }
-      },
-      "required": ["session_id"]
-    },
-    "content_type": "application/json"
-  }
-}
+Definitions live in `agent/tools.json`. The **description field is the prompt** — it's what the model reads to decide when to fire. Write it like you're briefing a person.
+
+```python
+# in the bridge, on a function call
+if ev["type"] == "response.function_call_arguments.done":
+    result = await dispatch(ev["name"], json.loads(ev["arguments"]), session_id)
+    await ai.send(json.dumps({
+        "type": "conversation.item.create",
+        "item": {"type": "function_call_output",
+                 "call_id": ev["call_id"],
+                 "output": result},        # spoken aloud — under 25 words, written as speech
+    }))
+    await ai.send(json.dumps({"type": "response.create"}))
 ```
 
-Tools we need: `record_preferences` · `start_calls` · `book_viewing` · `record_outcome` (called on the realtor-facing agent).
+Renter agent gets `record_preferences`, `start_calls`, `book_viewing`. Listing agent gets `record_outcome`. Don't give either the other's tools.
 
-**The webhook's return string is spoken aloud.** Keep responses under 25 words and write them as speech, not as JSON summaries.
+**The output string is spoken aloud.** Keep it short and write it as speech, never as a JSON summary.
 
 ## Two agents, two prompts
 
@@ -119,17 +105,19 @@ Always populate `source` — `"Mark, 1:42pm"`. Provenance on the card turns the 
 
 ## Setup checklist
 
-1. Twilio number with **Voice and SMS** capability
-2. Provider account, one agent per role, Twilio number imported → note the `phone_number_id`
-3. ngrok running; put the URL into every tool in `agent/tools.json`
-4. Register the tools in the dashboard
-5. Test: place a call to your own phone, say something that should fire a tool, watch the server log
+Full runbook: [docs/VOICE_SPIKE.md](../../../docs/VOICE_SPIKE.md). In short:
 
-**Done when** you speak on a call and your FastAPI logs the tool call with its arguments. Until that works, nothing else in this lane matters.
+1. ngrok free static domain → `PUBLIC_URL`
+2. Twilio number (Voice **and** SMS), all three teammate phones added to **Verified Caller IDs**
+3. `OPENAI_API_KEY` in `.env`
+4. `make bridge` · `make tunnel` · `make spike TO=…`
+
+**Done when** your phone rings, the agent speaks first, and it stops when you interrupt. Until that works, nothing else in this lane matters.
 
 ## Gotchas
 
 - Three simultaneous outbound calls may need more than one Twilio number. Test concurrency early, not at 14:00.
-- ngrok URLs change on restart unless you reserve a subdomain. A restarted tunnel silently breaks every registered tool.
+- Use your ngrok **static** domain. A restarted tunnel with a new URL breaks every in-flight call.
 - Every `agent_phone` in `data/listings.json` is a teammate's number. We never cold-call real people with a bot.
-- Provider dashboards cache tool definitions. After editing `tools.json`, re-sync and place a fresh test call.
+- Twilio trial accounts only dial **verified** numbers. Error `21219` means the destination isn't verified.
+- Audio format, barge-in and `streamSid` are already solved in `spike_bridge.py`. If audio misbehaves, read it before changing it.

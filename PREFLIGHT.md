@@ -18,7 +18,7 @@ Companion to [PLAYBOOK.md](PLAYBOOK.md), which covers strategy, the demo script 
 
 I read SITE COBRA's source (3rd place, Poland — the closest analogue to what we're building). The most important thing in that repo is what they *didn't* build.
 
-**Their entire telephony layer is 182 lines of Python and one HTTP POST.**
+**Their entire telephony layer was 182 lines of Python and one HTTP POST** to a managed voice vendor.
 
 ```python
 POST https://api.elevenlabs.io/v1/convai/twilio/outbound-call
@@ -34,7 +34,7 @@ POST https://api.elevenlabs.io/v1/convai/twilio/outbound-call
 
 That's it. They never touched audio. No μ-law encoding, no media-stream websocket, no barge-in handling, no interruption logic — the managed conversational-telephony provider owns all of it. The agent's behaviour lives in a dashboard, its tools are declared as **webhooks** in a JSON file, and their own server just exposes small endpoints for the agent to call.
 
-**This removes the single biggest risk in our plan.** My earlier Gate 2 ("by 12:30 you must hear the agent and dial out") assumed 90 minutes of audio plumbing. On a managed platform it's a 20-minute task you can finish before doors.
+**We took the same shape but a different vendor.** A managed voice vendor costs money; OpenAI is the marquee sponsor, supplies event credits, and its Realtime API does the same job for free. The price is ~80 lines of audio proxying — already written and proven in `scripts/spike_bridge.py`, so build-day time still goes to the product. See [docs/VOICE_SPIKE.md](docs/VOICE_SPIKE.md).
 
 ### Their architecture, which we should copy almost exactly
 
@@ -56,7 +56,7 @@ Two details worth stealing outright: they sent the SMS **during** the call, not 
 
 | Layer | Use | Why | Fallback |
 |---|---|---|---|
-| **Voice transport** | ElevenLabs Conversational AI + a Twilio number (or Vapi / Retell) | One POST places a call. Provider owns audio format, barge-in, interruption. Proven at 3rd place | OpenAI Realtime + Twilio Elastic SIP trunk — sponsor-aligned, more setup today |
+| **Voice transport** | **OpenAI Realtime + Twilio Media Streams** | Free: marquee sponsor, event credits, Twilio trial credit. Bridge written and proven before the event (`scripts/spike_bridge.py`) | OpenAI SIP connector for the inbound leg only — outbound over SIP is undocumented |
 | **Agent behaviour** | Dashboard prompt + `agent/tools.json` webhook definitions | No redeploy to change what the agent says. Tools point at our server | — |
 | **Backend** | Python 3.12 · FastAPI · uvicorn | Team strength, async-native for three concurrent calls, matches COBRA | — |
 | **Reasoning + extraction** | OpenAI Agents SDK + **structured outputs** for `Preferences` and `CallOutcome` | Marquee sponsor stays genuinely central even though transport is managed. `CallOutcome` is what makes call results *rankable* instead of just transcribed | — |
@@ -112,7 +112,7 @@ Ordered by risk, not by sequence. **It's ~2:40am and doors are at 10:00 — if y
 | | Task | Done when |
 |---|---|---|
 | 1 | **Twilio account + a Canadian number** with Voice **and** SMS capability | The number shows both capabilities in console |
-| 2 | **Voice provider account**, create one agent, import the Twilio number | You trigger a test call from the dashboard and **your own phone rings and the agent talks** |
+| 2 | **OpenAI key** in `.env`; run `make bridge` + `make tunnel` | `make spike TO=…` rings your phone, the agent speaks, and it stops when you interrupt |
 | 3 | **ngrok running**, URL noted | `curl https://<sub>.ngrok-free.app/health` from your phone's data connection returns 200 |
 | 4 | **Public submission repo created + everyone can push to it** | Every teammate can `git push` to it. `base` stays private |
 | 5 | **All keys in `.env`**, `.env.example` committed, `.env` gitignored | `git status` shows no `.env` |
