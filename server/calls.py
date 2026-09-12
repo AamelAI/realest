@@ -36,6 +36,10 @@ E164 = re.compile(r"^\+[1-9]\d{7,14}$")
 _ended: dict[str, bool] = {}           # session_id -> the call has already ended
 _link_sms_started: set[str] = set()    # session_id -> the 5s link-SMS timer already ran once
 _recent_sms: dict[tuple[str, str], float] = {}  # (to, body) -> last-sent monotonic time
+_conversations: dict[tuple[str, str], str] = {}  # (session, listing) -> ElevenLabs conversation_id
+
+POLL_EVERY_S = 5
+_TERMINAL = frozenset({"done", "failed", "completed", "error", "cancelled"})
 
 
 def _twilio():
@@ -91,6 +95,11 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
         log.info("place_call[%s]: elevenlabs %s → %s conv=%s sid=%s",
                  session_id, listing_id, lst.agent_phone,
                  handle.conversation_id, handle.call_sid)
+        if handle.conversation_id:
+            _conversations[(session_id, listing_id)] = handle.conversation_id
+            asyncio.create_task(watch_listing_call(
+                session_id, listing_id, handle.conversation_id, extra_questions,
+            ))
         return cid
 
     client, public = _twilio(), os.getenv("PUBLIC_URL", "").rstrip("/")
@@ -141,6 +150,102 @@ async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list
             return exc
 
     return await asyncio.gather(*(one(l) for l in listing_ids), return_exceptions=True)
+
+
+def _listing_card(session_id: str, listing_id: str):
+    s = store.get(session_id)
+    return next((st for st in (s.listings if s else []) if st.listing_id == listing_id), None)
+
+
+def flatten_transcript(data: dict) -> str:
+    """ElevenLabs conversation payload → plain text. Empty turns dropped."""
+    turns = data.get("transcript") or data.get("transcripts") or []
+    if isinstance(turns, str):
+        return turns.strip()
+    lines: list[str] = []
+    for t in turns:
+        if not isinstance(t, dict):
+            continue
+        role = str(t.get("role") or t.get("speaker") or "").strip()
+        msg = t.get("message") or t.get("text") or t.get("content") or ""
+        if isinstance(msg, list):
+            bits = []
+            for part in msg:
+                if isinstance(part, dict):
+                    bits.append(str(part.get("text") or part.get("message") or ""))
+                else:
+                    bits.append(str(part))
+            msg = " ".join(bits)
+        msg = str(msg).strip()
+        if not msg:
+            continue
+        lines.append(f"{role}: {msg}" if role else msg)
+    return "\n".join(lines)
+
+
+def _conversation_status(data: dict) -> str:
+    raw = data.get("status") or (data.get("metadata") or {}).get("status") or ""
+    return str(raw).strip().lower()
+
+
+async def watch_listing_call(
+    session_id: str,
+    listing_id: str,
+    conversation_id: str,
+    extra_questions: list[str],
+) -> None:
+    """Poll ConvAI until the listing tool writes an outcome, or we extract one.
+
+    Must not run inside fan_out's await — the renter would sit in silence.
+    """
+    import voice
+    provider = voice.ElevenLabsProvider()
+    deadline = time.monotonic() + CALL_TIMEOUT
+    last: dict = {}
+
+    while time.monotonic() < deadline:
+        card = _listing_card(session_id, listing_id)
+        if card is None:
+            return
+        if card.outcome is not None or card.status is not CallStatus.CALLING:
+            log.info("watch[%s/%s]: webhook already landed — stop", session_id, listing_id)
+            return
+        try:
+            last = await provider.get_conversation(conversation_id)
+        except Exception as exc:
+            log.warning("watch[%s/%s]: poll failed: %s", session_id, listing_id, exc)
+            await asyncio.sleep(POLL_EVERY_S)
+            continue
+
+        status = _conversation_status(last)
+        text = flatten_transcript(last)
+        if status in _TERMINAL:
+            if text.strip():
+                oc = await extract_outcome(text, extra_questions)
+                import main
+                await main.agent_outcome({
+                    "session_id": session_id, "listing_id": listing_id,
+                    **oc.model_dump(mode="json"),
+                })
+            else:
+                await mark_no_answer(session_id, listing_id, extra_questions)
+            return
+        await asyncio.sleep(POLL_EVERY_S)
+
+    card = _listing_card(session_id, listing_id)
+    if card is None or card.outcome is not None or card.status is not CallStatus.CALLING:
+        return
+    text = flatten_transcript(last)
+    if text.strip():
+        oc = await extract_outcome(text, extra_questions)
+        import main
+        await main.agent_outcome({
+            "session_id": session_id, "listing_id": listing_id,
+            **oc.model_dump(mode="json"),
+        })
+        return
+    log.info("watch[%s/%s]: timeout — no-answer", session_id, listing_id)
+    await mark_no_answer(session_id, listing_id, extra_questions)
 
 
 async def mark_no_answer(session_id: str, listing_id: str, extra_questions: list[str]) -> None:
