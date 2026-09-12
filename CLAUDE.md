@@ -8,7 +8,7 @@ Read this before writing any code in this repo. It is the shared brief for every
 
 You phone it. You describe what you want. It texts you a link, and a page in your hand reorders itself as you keep talking. When you ask it to, it calls three listing agents **at once**, asks them the things listings never say — is it still available, what does parking actually cost, will you take a dog — and re-ranks your shortlist from what those humans said. Then it books the viewing and texts you the confirmation. If nobody picks up, or it's the wrong hour to be calling, it drafts an email instead and says so.
 
-Built by **AAMEL** for *Agents, Everywhere* (Toronto, Sep 12 2026). Strategy, demo script and scoring live in [PLAYBOOK.md](PLAYBOOK.md). Setup and stack rationale live in [PREFLIGHT.md](PREFLIGHT.md).
+Built by **AAMEL** for *Agents, Everywhere* (Toronto, Sep 12 2026). Strategy, demo script and scoring live in [PLAYBOOK.md](PLAYBOOK.md). Setup and stack rationale live in [PREFLIGHT.md](PREFLIGHT.md). **Your tasks are in [BACKLOG.md](BACKLOG.md)** — find your lane, take the next item.
 
 ## The one thing that matters
 
