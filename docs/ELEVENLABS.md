@@ -65,15 +65,43 @@ That command uses `ElevenLabsProvider` — the same class `calls.place_call()` w
 
 ---
 
-## 5 · Flip the switch (not yet)
+## 5 · Phase 1 — plumb into the server
 
-When the spike works and you are ready to plumb outbound through the server:
+The spike only proves the vendor. Phase 1 is `start_calls` → `fan_out` → `place_call` → ElevenLabs, and dashboard tools hitting `/agent/*`.
+
+In `.env`:
 
 ```
+TRANSPORT=voice
 VOICE_PROVIDER=elevenlabs
 ```
 
-Until then the live path is still OpenAI Realtime (`make spike` / `make bridge` / `calls.place_call`).
+Leave `TRANSPORT=stub` if you only want scripted listing agents (no phone). Stub ignores `VOICE_PROVIDER`.
+
+### Webhook tools
+
+`make tunnel` must be up. Then:
+
+```bash
+make eleven-tools
+```
+
+That prints `agent/elevenlabs-tools.json` with `{PUBLIC_URL}` replaced. In ElevenLabs:
+
+1. **Renter** agent → Tools → add `record_preferences`, `start_calls`, `book_viewing` as **webhook / POST**.
+2. **Listing** agent → Tools → add `record_outcome` as **webhook / POST**.
+3. For `session_id` and `listing_id`, use dynamic variables (`{{session_id}}`, `{{listing_id}}`). Do not let the model invent them.
+4. Default method is GET — set **POST** or the body never arrives.
+
+The server already implements those routes. The tool result is JSON; the agent should read the `speak` field aloud.
+
+### Done when
+
+1. `GET /health` shows `"transport":"voice","voice_provider":"elevenlabs"`.
+2. A `POST /agent/start-calls` (or the renter saying “call Wellington”) rings a teammate as the listing agent.
+3. That agent’s `record_outcome` webhook flips the card and re-ranks.
+
+Inbound renter calls still work if the Twilio number is assigned to the Renter agent in the dashboard. Outbound listing calls no longer need `make bridge`.
 
 ---
 

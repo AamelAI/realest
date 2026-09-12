@@ -42,7 +42,15 @@ SHORTLIST_SIZE = 4
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "listings": len(L.load()), "sessions": len(store.all_ids())}
+    import transport
+    import voice
+    return {
+        "status": "ok",
+        "listings": len(L.load()),
+        "sessions": len(store.all_ids()),
+        "transport": transport.mode(),
+        "voice_provider": voice.provider_name(),
+    }
 
 
 # ── reading ──────────────────────────────────────────────────────────────────
