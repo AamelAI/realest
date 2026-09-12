@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const session = new URL(req.url).searchParams.get("session");
   if (!session) return Response.json({ error: "missing session" }, { status: 400 });
 
-  const backend = process.env.BACKEND_URL;
+  const backend = process.env.BACKEND_URL?.replace(/\/+$/, "");
   if (!backend) return Response.json({ error: "BACKEND_URL not set" }, { status: 500 });
 
   try {

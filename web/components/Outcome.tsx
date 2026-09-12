@@ -52,7 +52,7 @@ export function EmailCard({
         No answer{card.outcome?.source ? ` · ${card.outcome.source}` : ""}
       </p>
       <p className="mt-2 text-[13px] leading-[1.5]">
-        {card.address} went to voicemail, so we drafted an email instead.
+        No answer at {card.address}, so we drafted an email instead.
       </p>
 
       <div
