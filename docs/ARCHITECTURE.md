@@ -142,6 +142,8 @@ Rules, in order of force:
 4. Then weighted preference fit, with the weights the caller stated most recently.
 5. Hard conflicts (dog vs cats-only) don't remove a listing — they annotate it. The caller decides.
 
+**Neighbourhoods are fuzzy on purpose.** Exact area match scores **30**, a walkable neighbour **14**, anywhere else **−30** (`NEARBY` in `server/listings.py`). A caller who says "King West" means "or near enough that I'd still go and see it" — strict matching returns an empty shortlist, which is worse than a Liberty Village unit one streetcar stop away. Exact hits always outrank neighbours, and the card shows the real neighbourhood, so nothing is hidden.
+
 Rule 5 matters: the agent surfaces the conflict and lets the human choose. That's the controllability story.
 
 ---
