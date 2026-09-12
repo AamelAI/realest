@@ -60,11 +60,44 @@ def _transit_minutes(listing: Listing) -> int:
     return int(m.group(1)) if m else 99
 
 
+# Walkable-adjacent Toronto neighbourhoods. A caller who says "King West"
+# means "King West, or near enough that I'd still go and see it" - an exact
+# string match throws away the unit one streetcar stop away. Adjacency scores
+# lower than an exact hit, so a true match always wins, but a near one still
+# makes the shortlist instead of nothing at all.
+NEARBY: dict[str, set[str]] = {
+    "king west":       {"liberty village", "waterfront", "west end", "downtown"},
+    "liberty village": {"king west", "west end", "waterfront"},
+    "waterfront":      {"king west", "downtown", "liberty village", "leslieville"},
+    "west end":        {"liberty village", "king west", "the annex"},
+    "the annex":       {"yorkville", "midtown", "west end"},
+    "yorkville":       {"the annex", "midtown", "downtown"},
+    "midtown":         {"yorkville", "the annex", "north york"},
+    "north york":      {"midtown"},
+    "leslieville":     {"waterfront", "downtown"},
+    "downtown":        {"king west", "waterfront", "yorkville", "leslieville"},
+}
+
+
+def area_score(listing: Listing, areas: list[str]) -> float:
+    """+30 in the named area, +14 walkable-adjacent, -30 nowhere near."""
+    hay = f"{listing.neighbourhood} {listing.address}".lower()
+    if any(a.lower() in hay for a in areas):
+        return 30.0
+    here = listing.neighbourhood.lower()
+    for a in areas:
+        if here in NEARBY.get(a.lower().strip(), set()):
+            return 14.0
+    return -30.0
+
+
 def fit(listing: Listing, prefs: Preferences, outcome: CallOutcome | None) -> float:
     """Weighted preference fit. Higher is better. Pure arithmetic, no I/O.
 
     Two tiers. Beds and neighbourhood are near-decisive - the caller named them,
-    so a wrong-area bargain must never outrank a right-area listing. Everything
+    so a wrong-area bargain must never outrank a right-area listing. Walkable
+    neighbours score about half an exact hit, so "King West" still surfaces the
+    Liberty Village unit one stop away rather than returning nothing. Everything
     else is weighted by where they put it in their stated priority order.
     """
     score = 0.0
@@ -74,8 +107,7 @@ def fit(listing: Listing, prefs: Preferences, outcome: CallOutcome | None) -> fl
     if prefs.beds is not None:
         score += 30.0 if listing.beds == prefs.beds else -18.0 * abs(listing.beds - prefs.beds)
     if prefs.areas:
-        hay = f"{listing.neighbourhood} {listing.address}".lower()
-        score += 30.0 if any(a.lower() in hay for a in prefs.areas) else -30.0
+        score += area_score(listing, prefs.areas)
     if prefs.baths is not None:
         score += 3.0 if listing.baths >= prefs.baths else -4.0
 

@@ -205,3 +205,10 @@ async def agent_email(payload: dict):
 import bridge  # noqa: E402
 
 bridge.attach(app)
+
+# The text layer. Same prompt, same tools, same dispatch() - only the transport
+# differs, so the whole product can be exercised by typing while voice lands in
+# parallel. GET /chat is a harness page; POST /chat is one turn.
+import chat  # noqa: E402
+
+chat.attach(app)
