@@ -17,6 +17,12 @@ tunnel:             ## public URL Twilio can reach (uses NGROK_DOMAIN from .env)
 	     echo "  Claim your free static domain: https://dashboard.ngrok.com/domains"; \
 	     ngrok http 8000; fi
 
+tunnel-test:        ## prove the ngrok static domain is reserved to this account
+	@bash scripts/tunnel_test.sh
+
+todo:               ## build-day board: make todo [MINE=D2] [STEP=3]
+	@uv run python scripts/todo.py
+
 web:                ## Next.js on :3000
 	cd web && npm run dev
 
