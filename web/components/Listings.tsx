@@ -114,14 +114,14 @@ function Row({
         {/* What the call turned up, and who said it. The handoff folds
             provenance into this line rather than giving it its own row — the
             card is a fixed 144px and a second row overflows it. */}
-        {note && (
+        {(note || card.outcome?.source) && (
           <p
             className="line-clamp-3 text-[11px] leading-[1.35]"
             style={{ color: s.proven || s.dead ? s.fg : "var(--color-muted)" }}
           >
             {note}
             {card.outcome?.source && (
-              <span className="text-faint"> — {card.outcome.source}</span>
+              <span className="text-faint">{note ? " — " : ""}{card.outcome.source}</span>
             )}
           </p>
         )}
@@ -137,16 +137,19 @@ function Row({
 
         {selecting && (
           <label className="flex cursor-pointer items-center justify-center p-1">
+            {/* The real input is visually hidden, so the focus ring has to be
+                painted on the box beside it — otherwise a keyboard user can tab
+                onto this control and see nothing at all. */}
             <input
               type="checkbox"
               checked={selected}
               onChange={() => onToggle(card.listing_id)}
-              className="sr-only"
+              className="peer sr-only"
             />
             <span className="sr-only">Call the agent for {card.address}</span>
             <span
               aria-hidden
-              className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] text-[14px] font-bold text-white transition-colors"
+              className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] text-[14px] font-bold text-white transition-colors peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[color:var(--color-accent)]"
               style={{
                 border: `1.5px solid ${selected ? "var(--color-accent)" : "rgba(20,22,26,.2)"}`,
                 background: selected ? "var(--color-accent)" : "#fff",
