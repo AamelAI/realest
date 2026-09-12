@@ -18,6 +18,9 @@ import type { Card } from "./types";
  */
 export function useCallTimers(listings: Card[]): Record<string, number> {
   const [starts, setStarts] = useState<Record<string, number>>({});
+  // A call that has ended keeps its final length. Without this the panel reads
+  // "0:00" the moment the last line hangs up.
+  const [frozen, setFrozen] = useState<Record<string, number>>({});
   const [now, setNow] = useState(0);
 
   // Sorted id list as a string: a stable dependency that only changes when the
@@ -30,8 +33,17 @@ export function useCallTimers(listings: Card[]): Record<string, number> {
 
   useEffect(() => {
     const ids = onCall ? onCall.split(",") : [];
+    const stamp = Date.now();
     setStarts((prev) => {
-      const stamp = Date.now();
+      // Anything that was on the phone and no longer is: freeze its length.
+      const ended = Object.keys(prev).filter((id) => !ids.includes(id));
+      if (ended.length) {
+        setFrozen((f) => {
+          const next = { ...f };
+          for (const id of ended) next[id] = Math.max(0, Math.floor((stamp - prev[id]) / 1000));
+          return next;
+        });
+      }
       const next: Record<string, number> = {};
       for (const id of ids) next[id] = prev[id] ?? stamp;
       const same =
@@ -48,7 +60,7 @@ export function useCallTimers(listings: Card[]): Record<string, number> {
     return () => clearInterval(id);
   }, [onCall]);
 
-  const elapsed: Record<string, number> = {};
+  const elapsed: Record<string, number> = { ...frozen };
   for (const [id, start] of Object.entries(starts)) {
     elapsed[id] = Math.max(0, Math.floor((now - start) / 1000));
   }

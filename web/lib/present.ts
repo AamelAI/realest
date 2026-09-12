@@ -73,9 +73,9 @@ export function noteOf(card: Card): string {
   const o = card.outcome;
   switch (card.status) {
     case "dead":
-      return "Leased — the listing is still up. The agent confirmed it on the call.";
+      return "The agent said it is gone — the listing is still up.";
     case "no_answer":
-      return "No answer, so we emailed the agent instead.";
+      return "No answer, so we emailed instead.";
     case "calling":
       return "";
     case "pending":
@@ -89,13 +89,17 @@ export function noteOf(card: Card): string {
       if (o.addons.length) {
         const real = o.real_rent;
         bits.push(
-          real && real !== card.rent
+          real && real > card.rent
             ? `${cap(o.addons.join(", "))} on top — really ${money(real)}.`
-            : `${cap(o.addons.join(", "))}.`,
+            : real && real < card.rent
+              ? `${cap(o.addons.join(", "))}. Really ${money(real)}.`
+              : `${cap(o.addons.join(", "))}.`,
         );
       }
       if (o.pets_allowed) bits.push(cap(o.pets_allowed) + ".");
       if (o.viewing_slot) bits.push(`Viewing ${o.viewing_slot}.`);
+      // Whatever the renter asked us to ask, in the agent's own answer.
+      for (const [k, v] of Object.entries(o.answers ?? {})) bits.push(`${cap(k)}: ${v}.`);
       if (!bits.length && o.available) bits.push("Available now.");
       return bits.join(" ");
     }
@@ -123,7 +127,10 @@ export type Criterion = { key: string; label: string };
  */
 export function criteriaOf(p: SessionState["preferences"]): Criterion[] {
   const out: Criterion[] = [];
-  if (p.beds) out.push({ key: `beds:${p.beds}`, label: `${p.beds} bed` });
+  if (p.beds != null) {
+    out.push({ key: `beds:${p.beds}`, label: p.beds === 0 ? "Studio" : `${p.beds} bed` });
+  }
+  if (p.baths != null) out.push({ key: `baths:${p.baths}`, label: `${p.baths} bath` });
   if (p.max_rent) out.push({ key: `rent:${p.max_rent}`, label: `Under ${money(p.max_rent)}` });
   for (const a of p.areas ?? []) out.push({ key: `area:${a}`, label: a });
   if (p.pets) out.push({ key: `pets:${p.pets}`, label: cap(p.pets) });
@@ -136,20 +143,27 @@ export function criteriaOf(p: SessionState["preferences"]): Criterion[] {
 
 /* ── phase, and the one line at the top ──────────────────────────────────── */
 
-export type Phase = "waiting" | "listening" | "calling" | "verified";
+export type Phase = "waiting" | "listening" | "calling" | "verified" | "emailed";
 
 export function phaseOf(s: SessionState): Phase {
   if (!s.listings.length) return "waiting";
   if (s.listings.some((l) => l.status === "calling")) return "calling";
-  if (s.listings.some((l) => l.status !== "pending")) return "verified";
+  // Only a call that came back with something counts as verified. A session
+  // where every line went to voicemail has verified nothing.
+  if (s.listings.some((l) => l.outcome && CONFIRMED.includes(l.status))) return "verified";
+  if (s.listings.some((l) => l.status === "no_answer")) return "emailed";
   return "listening";
 }
+
+/** Statuses that mean a human actually told us something. */
+export const CONFIRMED: CallStatus[] = ["verified", "booked", "dead"];
 
 export const HEADER_STATUS: Record<Phase, string> = {
   waiting: "connecting",
   listening: "listening — page updates live",
   calling: "calling agents",
   verified: "verified just now",
+  emailed: "no answer — emailed instead",
 };
 
 /** Which listings the renter may still send us out to call. */
