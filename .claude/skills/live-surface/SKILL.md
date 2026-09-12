@@ -5,6 +5,11 @@ description: The Next.js page the caller opens mid-call — card list, live poll
 
 # The live surface
 
+**The template is already built.** `web/` has the full shell — card states, responsive layout, both themes, reorder animation, tap-to-confirm. Preview it with `make web` and open `/`.
+
+What's left is `TODO(hackathon)`: pointing `BACKEND_URL` at the real server, and POSTing the selection to `/agent/start-calls`. Everything else is done.
+
+
 The page the caller opens from an SMS **while still on the phone**. It reorders as they talk.
 
 ## Why it exists
