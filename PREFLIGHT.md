@@ -114,7 +114,7 @@ Ordered by risk, not by sequence. **It's ~2:40am and doors are at 10:00 — if y
 | 1 | **Twilio account + a Canadian number** with Voice **and** SMS capability | The number shows both capabilities in console |
 | 2 | **Voice provider account**, create one agent, import the Twilio number | You trigger a test call from the dashboard and **your own phone rings and the agent talks** |
 | 3 | **ngrok running**, URL noted | `curl https://<sub>.ngrok-free.app/health` from your phone's data connection returns 200 |
-| 4 | **Repo public + skeleton pushed** | `gh repo view AamelAI/base --web` loads while signed out |
+| 4 | **Public submission repo created + everyone can push to it** | Every teammate can `git push` to it. `base` stays private |
 | 5 | **All keys in `.env`**, `.env.example` committed, `.env` gitignored | `git status` shows no `.env` |
 
 ### P1 — do if you have another hour (~60 min)
