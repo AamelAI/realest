@@ -142,13 +142,35 @@ def build(rows: list[list], phone: str, email: str, seed: int = 7) -> list[Listi
             property_type=ptype,
             sqft=int(low_num(features, "FT²") or 0) or None,
             photos=photos,
-            photo_url=photos[0] if photos else "",
+            photo_url=hero(f"L{i + 1:03d}", photos),
             source_url=slug,
             agent_name=rng.choice(AGENT_NAMES),
             agent_phone=phone,
             agent_email=email,
         ))
-    return out
+    return [l for l in out if plausible(l)]
+
+
+# rentals.ca mixes room shares in with whole units and the feed labels both the
+# same way. A 2-bed 3-bath at $1,050 in The Annex is somebody's spare room, not
+# an apartment - and because the ranker rewards headroom under budget, those
+# rows float to the top of every shortlist and make the whole set look fake.
+MIN_RENT = {0: 1400, 1: 1600, 2: 2100}
+
+# The feed's first photo is sometimes the building exterior rather than the
+# unit. For listings the demo runs on we pick the frame that actually shows
+# inside. Always the listing's OWN photos - nothing substituted from elsewhere.
+HERO_OVERRIDE = {"L086": 1}
+
+
+def hero(listing_id: str, photos: list[str]) -> str:
+    if not photos:
+        return ""
+    return photos[HERO_OVERRIDE.get(listing_id, 0) % len(photos)]
+
+
+def plausible(l: Listing) -> bool:
+    return l.rent >= MIN_RENT.get(l.beds, 2500)
 
 
 def main() -> int:
