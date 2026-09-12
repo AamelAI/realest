@@ -16,3 +16,4 @@ generated/
 
 # generated: contains personal demo contacts, regenerate with `make listings`
 data/listings.json
+data/preview.html
