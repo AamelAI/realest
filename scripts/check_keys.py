@@ -120,6 +120,45 @@ def check_exa() -> None:
     note("use for: card enrichment — transit, building reputation, neighbourhood")
 
 
+def check_elevenlabs() -> None:
+    key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    print("\nElevenLabs")
+    if not key:
+        meh("ELEVENLABS_API_KEY not set")
+        note("needed when you switch voice — see docs/ELEVENLABS.md")
+        return
+    try:
+        r = httpx.get("https://api.elevenlabs.io/v1/user",
+                      headers={"xi-api-key": key}, timeout=15)
+    except httpx.HTTPError as exc:
+        bad(f"unreachable: {exc}")
+        return
+    if r.status_code == 401:
+        bad("401 — key rejected")
+        note("ElevenLabs → Profile → API Keys")
+        return
+    if r.status_code != 200:
+        bad(f"HTTP {r.status_code}: {r.text[:160]}")
+        return
+    data = r.json()
+    tier = (data.get("subscription") or {}).get("tier") or "unknown"
+    ok(f"API key valid · tier {tier}")
+    phone = os.getenv("ELEVENLABS_PHONE_NUMBER_ID", "").strip()
+    renter = os.getenv("ELEVENLABS_RENTER_AGENT_ID", "").strip()
+    listing = os.getenv("ELEVENLABS_LISTING_AGENT_ID", "").strip()
+    if phone and renter and listing:
+        ok("phone + both agent ids set")
+        note("make eleven-spike TO=+1… to ring a verified number")
+    else:
+        missing = [k for k, v in (
+            ("ELEVENLABS_PHONE_NUMBER_ID", phone),
+            ("ELEVENLABS_RENTER_AGENT_ID", renter),
+            ("ELEVENLABS_LISTING_AGENT_ID", listing),
+        ) if not v]
+        meh(f"key works, still missing: {', '.join(missing)}")
+        note("import the Twilio number and create the two agents — docs/ELEVENLABS.md")
+
+
 def check_twilio() -> None:
     sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
     tok = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
@@ -152,6 +191,7 @@ if __name__ == "__main__":
     check_openrouter()
     check_exa()
     check_twilio()
+    check_elevenlabs()
     print()
     if not realtime:
         print(f"{Y}→ Realtime unavailable. Read docs/VOICE_FALLBACK.md before 11:15.{X}")
