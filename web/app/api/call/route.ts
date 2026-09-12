@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const backend = process.env.BACKEND_URL;
+  const backend = process.env.BACKEND_URL?.replace(/\/+$/, "");
   if (!backend) return Response.json({ error: "BACKEND_URL not set" }, { status: 500 });
 
   try {
