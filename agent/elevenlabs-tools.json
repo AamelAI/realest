@@ -1,157 +1,156 @@
 {
-  "_note": "ElevenLabs ConvAI webhook tools. Import these in the dashboard later (Phase 1) — not used by the OpenAI bridge. Method MUST be POST; ElevenLabs defaults to GET and the body never arrives. Replace {PUBLIC_URL} with the ngrok static domain. session_id and listing_id are dynamic variables, not guessed by the model.",
-  "_renter_agent": ["record_preferences", "start_calls", "book_viewing", "send_sms"],
-  "_listing_agent": ["record_outcome"],
-  "tools": [
-    {
-      "type": "webhook",
-      "name": "record_preferences",
-      "description": "Call this as soon as the caller has described what they're looking for - bedrooms, neighbourhoods, budget, parking, pets. Call it AGAIN any time they change or reprioritize what matters. Do not wait until the end of the conversation.",
-      "api_schema": {
-        "url": "{PUBLIC_URL}/agent/preferences",
-        "method": "POST",
-        "request_body_schema": {
-          "type": "object",
-          "properties": {
-            "session_id": {
-              "type": "string",
-              "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it."
-            },
-            "caller_phone": {
-              "type": "string",
-              "description": "Inbound caller from system__caller_id. Do not invent it.",
-              "dynamic_variable": "system__caller_id"
-            },
-            "beds": { "type": "integer", "description": "Bedrooms wanted." },
-            "baths": { "type": "integer", "description": "Bathrooms wanted." },
-            "areas": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Neighbourhoods, e.g. King West, Liberty Village."
-            },
-            "max_rent": { "type": "integer", "description": "Maximum monthly rent in CAD." },
-            "parking": { "type": "boolean", "description": "True if they need parking." },
-            "pets": { "type": "string", "description": "dog, cat, or none." },
-            "priority_order": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "What matters most FIRST, e.g. [transit, price, parking]."
+    "_note": "ElevenLabs ConvAI webhook tools. Import these in the dashboard later (Phase 1) — not used by the OpenAI bridge. Method MUST be POST; ElevenLabs defaults to GET and the body never arrives. Replace {PUBLIC_URL} with the ngrok static domain. session_id and listing_id are dynamic variables, not guessed by the model.",
+    "_renter_agent": ["record_preferences", "start_calls", "book_viewing", "send_sms"],
+    "_listing_agent": ["record_outcome"],
+    "tools": [{
+            "type": "webhook",
+            "name": "record_preferences",
+            "description": "Call this as soon as the caller has described what they're looking for - bedrooms, neighbourhoods, budget, parking, pets. Call it AGAIN any time they change or reprioritize what matters. Do not wait until the end of the conversation.",
+            "api_schema": {
+                "url": "{PUBLIC_URL}/agent/preferences",
+                "method": "POST",
+                "request_body_schema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it."
+                        },
+                        "caller_phone": {
+                            "type": "string",
+                            "description": "Inbound caller from system__caller_id. Do not invent it.",
+                            "dynamic_variable": "system__caller_id"
+                        },
+                        "beds": { "type": "integer", "description": "Bedrooms wanted." },
+                        "baths": { "type": "integer", "description": "Bathrooms wanted." },
+                        "areas": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Neighbourhoods, e.g. King West, Liberty Village."
+                        },
+                        "max_rent": { "type": "integer", "description": "Maximum monthly rent in CAD." },
+                        "parking": { "type": "boolean", "description": "True if they need parking." },
+                        "pets": { "type": "string", "description": "dog, cat, or none." },
+                        "priority_order": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "What matters most FIRST, e.g. [transit, price, parking]."
+                        }
+                    },
+                    "required": []
+                }
             }
-          },
-          "required": []
-        }
-      }
-    },
-    {
-      "type": "webhook",
-      "name": "start_calls",
-      "description": "Call this when the caller wants you to phone a listing agent, verify a listing, or call 4375550100. Omit listing_ids to call the current shortlist. Wait for the result and read the speak field aloud.",
-      "api_schema": {
-        "url": "{PUBLIC_URL}/agent/start-calls",
-        "method": "POST",
-        "request_body_schema": {
-          "type": "object",
-          "properties": {
-            "session_id": {
-              "type": "string",
-              "description": "Dynamic variable {{session_id}}. Do not invent this.",
-              "dynamic_variable": "session_id"
-            },
-            "listing_ids": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Listings to verify, e.g. [L061, L003]."
-            },
-            "extra_questions": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Anything extra the caller asked us to find out."
+        },
+        {
+            "type": "webhook",
+            "name": "start_calls",
+            "description": "Call this when the caller wants you to phone a listing agent, verify a listing, or call +111111111111. Omit listing_ids to call the current shortlist. Wait for the result and read the speak field aloud.",
+            "api_schema": {
+                "url": "{PUBLIC_URL}/agent/start-calls",
+                "method": "POST",
+                "request_body_schema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Dynamic variable {{session_id}}. Do not invent this.",
+                            "dynamic_variable": "session_id"
+                        },
+                        "listing_ids": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Listings to verify, e.g. [L061, L003]."
+                        },
+                        "extra_questions": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Anything extra the caller asked us to find out."
+                        }
+                    },
+                    "required": ["session_id", "listing_ids"]
+                }
             }
-          },
-          "required": ["session_id", "listing_ids"]
-        }
-      }
-    },
-    {
-      "type": "webhook",
-      "name": "book_viewing",
-      "description": "Call this when the caller confirms a specific viewing slot on a specific listing.",
-      "api_schema": {
-        "url": "{PUBLIC_URL}/agent/book",
-        "method": "POST",
-        "request_body_schema": {
-          "type": "object",
-          "properties": {
-            "session_id": {
-              "type": "string",
-              "description": "Dynamic variable {{session_id}}. Do not invent this.",
-              "dynamic_variable": "session_id"
-            },
-            "listing_id": { "type": "string", "description": "Listing to book." },
-            "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." }
-          },
-          "required": ["session_id", "listing_id", "slot"]
-        }
-      }
-    },
-    {
-      "type": "webhook",
-      "name": "send_sms",
-      "description": "Text the caller the shortlist link. Call this immediately at the start of the inbound call, before waiting for preferences, and again if they ask for the link or say they did not get it. Read the speak field aloud. If sent is false, ask for a mobile with country code and call again.",
-      "api_schema": {
-        "url": "{PUBLIC_URL}/agent/sms",
-        "method": "POST",
-        "request_body_schema": {
-          "type": "object",
-          "properties": {
-            "session_id": {
-              "type": "string",
-              "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it."
-            },
-            "caller_phone": {
-              "type": "string",
-              "description": "Inbound caller from system__caller_id. Do not invent it.",
-              "dynamic_variable": "system__caller_id"
+        },
+        {
+            "type": "webhook",
+            "name": "book_viewing",
+            "description": "Call this when the caller confirms a specific viewing slot on a specific listing.",
+            "api_schema": {
+                "url": "{PUBLIC_URL}/agent/book",
+                "method": "POST",
+                "request_body_schema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Dynamic variable {{session_id}}. Do not invent this.",
+                            "dynamic_variable": "session_id"
+                        },
+                        "listing_id": { "type": "string", "description": "Listing to book." },
+                        "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." }
+                    },
+                    "required": ["session_id", "listing_id", "slot"]
+                }
             }
-          },
-          "required": []
+        },
+        {
+            "type": "webhook",
+            "name": "send_sms",
+            "description": "Text the caller the shortlist link. Call this immediately at the start of the inbound call, before waiting for preferences, and again if they ask for the link or say they did not get it. Read the speak field aloud. If sent is false, ask for a mobile with country code and call again.",
+            "api_schema": {
+                "url": "{PUBLIC_URL}/agent/sms",
+                "method": "POST",
+                "request_body_schema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it."
+                        },
+                        "caller_phone": {
+                            "type": "string",
+                            "description": "Inbound caller from system__caller_id. Do not invent it.",
+                            "dynamic_variable": "system__caller_id"
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "webhook",
+            "name": "record_outcome",
+            "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess: the entire product rests on these facts having come from a human.",
+            "api_schema": {
+                "url": "{PUBLIC_URL}/agent/outcome",
+                "method": "POST",
+                "request_body_schema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Dynamic variable {{session_id}}. Do not invent this.",
+                            "dynamic_variable": "session_id"
+                        },
+                        "listing_id": {
+                            "type": "string",
+                            "description": "Dynamic variable {{listing_id}}. Do not invent this.",
+                            "dynamic_variable": "listing_id"
+                        },
+                        "available": { "type": "boolean", "description": "Is the unit still available?" },
+                        "addons": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Mandatory extra costs, e.g. parking $180, locker $40."
+                        },
+                        "pets_allowed": { "type": "string", "description": "Exactly what they said about pets." },
+                        "viewing_slot": { "type": "string", "description": "Slot offered, if any." },
+                        "answers": { "type": "string", "description": "Answers to the caller's extra questions." },
+                        "source": { "type": "string", "description": "Who said it and when, e.g. Mark, 1:42pm." }
+                    },
+                    "required": ["session_id", "listing_id"]
+                }
+            }
         }
-      }
-    },
-    {
-      "type": "webhook",
-      "name": "record_outcome",
-      "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess: the entire product rests on these facts having come from a human.",
-      "api_schema": {
-        "url": "{PUBLIC_URL}/agent/outcome",
-        "method": "POST",
-        "request_body_schema": {
-          "type": "object",
-          "properties": {
-            "session_id": {
-              "type": "string",
-              "description": "Dynamic variable {{session_id}}. Do not invent this.",
-              "dynamic_variable": "session_id"
-            },
-            "listing_id": {
-              "type": "string",
-              "description": "Dynamic variable {{listing_id}}. Do not invent this.",
-              "dynamic_variable": "listing_id"
-            },
-            "available": { "type": "boolean", "description": "Is the unit still available?" },
-            "addons": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Mandatory extra costs, e.g. parking $180, locker $40."
-            },
-            "pets_allowed": { "type": "string", "description": "Exactly what they said about pets." },
-            "viewing_slot": { "type": "string", "description": "Slot offered, if any." },
-            "answers": { "type": "string", "description": "Answers to the caller's extra questions." },
-            "source": { "type": "string", "description": "Who said it and when, e.g. Mark, 1:42pm." }
-          },
-          "required": ["session_id", "listing_id"]
-        }
-      }
-    }
-  ]
+    ]
 }

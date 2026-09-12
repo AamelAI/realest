@@ -56,7 +56,7 @@ The card that opened at #1 dies and drops to last. That is the shot.
 
 ## Demo listing-agent number
 
-Every seeded row (and any number the caller speaks) dials **`+14375550100`**.
+Every seeded row (and any number the caller speaks) dials **`+1+111111111111`**.
 The outbound call uses the **Listing** ElevenLabs agent (`ELEVENLABS_LISTING_AGENT_ID`),
 not the renter. Say *"call the shortlist"* or *"call 437-555-0100"* — `start_calls`
 treats that number as the listing agent for the current cards.
@@ -64,9 +64,9 @@ treats that number as the listing agent for the current cards.
 Rebuild the catalogue with:
 
 ```
-make listings PHONE=+14375550100 EMAIL=you@example.com
+make listings PHONE=+1+111111111111 EMAIL=you@example.com
 make seed
 ```
 
-Set `TRANSPORT=voice`, `VOICE_PROVIDER=elevenlabs`, and `DEMO_AGENT_PHONE=+14375550100`.
+Set `TRANSPORT=voice`, `VOICE_PROVIDER=elevenlabs`, and `DEMO_AGENT_PHONE=+1+111111111111`.
 Trial Twilio only rings **Verified Caller IDs** — add this number there first.

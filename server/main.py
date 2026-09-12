@@ -161,7 +161,7 @@ _CALLER_KEYS = (
 
 
 def _apply_caller(payload: dict) -> str:
-    """Inbound caller as E.164. Accepts +1437…, 4375550100, or (437) 555-0100."""
+    """Inbound caller as E.164. Accepts +1437…, +111111111111, or (437) 555-0100."""
     if not isinstance(payload, dict):
         return ""
     for block in _walk_dicts(payload):
@@ -335,7 +335,7 @@ def _resolve_ids(raw: list, session_id: str) -> list[str]:
         token = str(item).strip()
         dest = calls.as_e164(token)
         if dest:
-            # "call 4375550100" means: ring that number as the listing agent
+            # "call +111111111111" means: ring that number as the listing agent
             # for this shortlist, not a listing id.
             calls.set_session_dest(session_id, dest)
             continue
@@ -393,11 +393,16 @@ def _resolve_listing_id(payload: dict, session_id: str) -> str:
 
 @app.post("/agent/start-calls")
 async def agent_start_calls(payload: dict):
-    """Verify these listings. Fan out. Cards flip to CALLING before any await."""
+    """Verify the top listing. Demo: one ring, always DEMO_AGENT_PHONE."""
     sid = _ensure_session(payload)
     ids = await _ensure_call_targets(
         sid, _resolve_ids(_as_list(payload.get("listing_ids")), sid)
     )
+    if len(ids) > 1:
+        log.info("start-calls[%s]: demo — only first %s, skip %s", sid, ids[0], ids[1:])
+        ids = ids[:1]
+    demo = calls.as_e164(os.getenv("DEMO_AGENT_PHONE", "")) or "+1+111111111111"
+    calls.set_session_dest(sid, demo)
     ids = calls.unique_destinations(sid, ids)
     extra = _as_list(payload.get("extra_questions"))
     phone = _apply_caller(payload)

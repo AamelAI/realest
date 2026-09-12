@@ -113,7 +113,7 @@ The listing call is not the product. The card flip is.
 
 **Poll (the safety net).** After `place_call`, the server polls `GET /v1/convai/conversations/{id}` every 5s for up to 90s. If the webhook already wrote an outcome, the poll stops. If the call ends with a transcript and no webhook, `extract_outcome()` fills the card. If nothing arrives, the card goes `no_answer` and an email is drafted. Cards must not stay `calling`.
 
-**Inbound session.** `/agent/init` mints `session_id` at pickup and texts the shortlist link as soon as we have `caller_id` (bare `4375550100` is fine — we normalize to E.164). Wire this or the SMS never leaves:
+**Inbound session.** `/agent/init` mints `session_id` at pickup and texts the shortlist link as soon as we have `caller_id` (bare `+111111111111` is fine — we normalize to E.164). Wire this or the SMS never leaves:
 
 1. Workspace **Agents → Settings** → conversation initiation webhook = `{PUBLIC_URL}/agent/init`
 2. Renter agent **Security** → enable *Fetch initiation client data from a webhook*
