@@ -1,76 +1,91 @@
 @import "tailwindcss";
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Realest — a ledger, not a dashboard.
+   Realest — the live surface.
+   Built to the design handoff (design_handoff_realest_verification).
 
-   The page is a verification record: what was listed, what turned out to be
-   true, and who said so. So it's built like a printed table — hairline rules,
-   flush-left type, figures aligned to a column — not like an app.
-
-   Deliberately single-look (light). Committing to one ground lets the status
-   colours do real work as *text* rather than as decorated chips.
-
-   Rules this design holds to:
-     · no cards, no border-radius, no shadows, no rings
-     · no pill badges — status is a word, set in its colour
-     · no all-caps labels — sentence case, weight carries hierarchy
-     · no backdrop blur
-     · figures are tabular and align to a rule
+   The renter is on the phone. This page fills in while they talk, reorders
+   when they say something new, and then shows what happened when we rang the
+   listing agents. Three things are load-bearing and must not be softened:
+     · the reorder — one node per listing, moved by transform, never re-sorted
+     · the correction — old rent struck, real rent beside it
+     · provenance — every fact says which agent said it, and when
    ───────────────────────────────────────────────────────────────────────── */
 @theme {
-  --color-paper: #fcfcfb;
-  --color-ink: #15171c;
-  --color-ink-2: #4a4d55;
-  --color-muted: #8a8d95;
-  --color-rule: #dcdee2;
-  --color-hair: #ededef;
-  --color-wash: #f3f4f2;
+  --color-ink: #14161a;
+  --color-muted: #5c6470;
+  --color-faint: #8b93a1;
+  --color-dim: #c7ccd4;
 
-  /* Status reads as text, so these are set dark enough for body copy. */
-  --color-real: #17633f;
-  --color-live: #8f5300;
-  --color-gone: #9d2020;
+  --color-accent: #3730a3;
+  --color-tint: #f5f4ff;
 
-  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --color-ground: #eceef1;
+  --color-panel: #f4f6f8;
+  --color-warm: #fafaf8;
+  --color-surface: #ffffff;
+
+  /* status: text colour on its own tint */
+  --color-real: #0b6b4f;
+  --color-real-bg: #e7f3ec;
+  --color-warn: #b45309;
+  --color-warn-bg: #fdf2e3;
+  --color-dead: #b42318;
+  --color-dead-bg: #fdeceb;
+  --color-none: #5c6470;
+  --color-none-bg: #f0f1f3;
+
+  --font-display: var(--font-instrument), system-ui, sans-serif;
+  --font-mono: var(--font-plex), ui-monospace, monospace;
+}
+
+/* hairlines — the handoff specifies four weights of the same ink */
+:root {
+  --hair-row: rgba(20, 22, 26, 0.07);
+  --hair-head: rgba(20, 22, 26, 0.08);
+  --hair-panel: rgba(20, 22, 26, 0.1);
+  --hair-card: rgba(20, 22, 26, 0.12);
+  --hair-btn: rgba(20, 22, 26, 0.16);
+  --accent-18: rgba(55, 48, 163, 0.18);
+  --accent-25: rgba(55, 48, 163, 0.25);
+  --accent-35: rgba(55, 48, 163, 0.35);
+  --real-40: rgba(11, 107, 79, 0.4);
 }
 
 html {
-  background: var(--color-paper);
+  background: var(--color-surface);
   -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--color-paper);
+  margin: 0;
+  background: var(--color-surface);
   color: var(--color-ink);
   font-family: var(--font-display);
-  font-size: 15px;
-  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
-  padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Digits must not shift between polls or the ledger looks like it twitches. */
+/* Figures must not shift between polls, or the rent column twitches on the
+   very tick that corrects a price. */
 .tnum {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
-/* A row being called: a hairline sweeping under it. Not a spinner, not a pill. */
-@keyframes sweep {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(400%); }
+/* Entrance for every card that appears mid-conversation. */
+@keyframes rIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
 }
-.sweep::after {
-  content: "";
-  position: absolute;
-  inset-inline-start: 0;
-  bottom: -1px;
-  height: 1px;
-  width: 25%;
-  background: var(--color-live);
-  animation: sweep 1.6s linear infinite;
+.r-in { animation: rIn 0.45s both; }
+
+/* The live dot: page header 1.4s, calls header 1s. */
+@keyframes rPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
 }
+.r-pulse { animation: rPulse 1.4s infinite; }
+.r-pulse-fast { animation: rPulse 1s infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -80,12 +95,5 @@ body {
   }
 }
 
-::selection {
-  background: var(--color-ink);
-  color: var(--color-paper);
-}
-
-:focus-visible {
-  outline: 2px solid var(--color-ink);
-  outline-offset: 3px;
-}
+::selection { background: var(--color-accent); color: #fff; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
