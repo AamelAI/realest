@@ -44,9 +44,13 @@ export type SessionState = {
   session_id: string;
   preferences: {
     beds?: number | null;
+    baths?: number | null;
     areas?: string[];
     max_rent?: number | null;
     parking?: boolean | null;
+    pets?: string | null;
+    priority_order?: string[];
+    extra_questions?: string[];
   };
   listings: Card[];   // already ranked. NEVER sort this in the page.
   agent_says: string;
