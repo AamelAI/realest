@@ -1,6 +1,6 @@
 {
   "_note": "ElevenLabs ConvAI webhook tools. Import these in the dashboard later (Phase 1) — not used by the OpenAI bridge. Method MUST be POST; ElevenLabs defaults to GET and the body never arrives. Replace {PUBLIC_URL} with the ngrok static domain. session_id and listing_id are dynamic variables, not guessed by the model.",
-  "_renter_agent": ["record_preferences", "start_calls", "book_viewing"],
+  "_renter_agent": ["record_preferences", "start_calls", "book_viewing", "send_sms"],
   "_listing_agent": ["record_outcome"],
   "tools": [
     {
@@ -87,6 +87,29 @@
             "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." }
           },
           "required": ["session_id", "listing_id", "slot"]
+        }
+      }
+    },
+    {
+      "type": "webhook",
+      "name": "send_sms",
+      "description": "Text the caller the shortlist link. Call this after record_preferences, or when they ask for the link. Read the speak field aloud. If sent is false, ask for a mobile with country code and call again.",
+      "api_schema": {
+        "url": "{PUBLIC_URL}/agent/sms",
+        "method": "POST",
+        "request_body_schema": {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "type": "string",
+              "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it."
+            },
+            "caller_phone": {
+              "type": "string",
+              "description": "Caller's mobile in E.164, e.g. +14165551234."
+            }
+          },
+          "required": []
         }
       }
     },
