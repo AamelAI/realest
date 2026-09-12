@@ -3,9 +3,10 @@
 help:
 	@grep -E '^[a-z]+:' Makefile | grep -v '^\.PHONY' | sed 's/:.*//' | sed 's/^/  make /'
 
-install:            ## one-time: python deps + web deps
+install:            ## one-time: python deps + web deps + git hooks
 	uv sync
 	cd web && npm install
+	@git config core.hooksPath .githooks && echo "✓ commit-msg hook enabled (nudges for [task-id])"
 
 dev:                ## FastAPI on :8000
 	uv run uvicorn main:app --reload --port 8000 --app-dir server

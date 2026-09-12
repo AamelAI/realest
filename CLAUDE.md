@@ -103,6 +103,19 @@ Load the matching skill before you start that piece of work. They carry the cont
 - Keep functions short enough to read at 14:00 on four hours of sleep.
 - Commit often with real messages — the commit history is how we prove what was built during the event.
 
+## Closing tasks — do this on every commit
+
+Work is tracked in [TODO.md](TODO.md). **Put the task id in square brackets in the commit message** and it closes automatically:
+
+```bash
+git commit -m "[1.4] outbound call places and rings"
+git commit -m "[1.6] [1.7] ranking + state endpoint"   # several at once
+```
+
+`make todo` derives the board from `git log` — nobody edits TODO.md during the build, so there is nothing to merge-conflict on. If you finish a task and don't tag the commit, **your teammates cannot see it is done.**
+
+Before you start a piece of work, run `make todo MINE=D1` (or D2/D3) to find the next task in your lane.
+
 ## Repos
 
 `AamelAI/base` (this one) is the **private team template**. Work happens in clones of it. The finished project is pushed to a **separate public repo**, and that public URL is the submission. Don't paste a `base` link into the submission form.
