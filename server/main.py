@@ -152,8 +152,18 @@ def _ensure_session(payload: dict) -> str:
 
 
 def _apply_caller(payload: dict) -> str:
-    phone = _nested_get(payload, "caller_phone", "From", "from_number", "user_id")
+    phone = _nested_get(payload, "caller_phone", "From", "from_number",
+                        "user_id", "system__caller_id")
     return phone if phone and calls.E164.match(phone) else ""
+
+
+def _as_list(val) -> list[str]:
+    """ElevenLabs dashboard body fields are strings; accept a list or CSV."""
+    if val is None or val == "":
+        return []
+    if isinstance(val, list):
+        return [str(x).strip() for x in val if str(x).strip()]
+    return [p.strip() for p in str(val).split(",") if p.strip()]
 
 
 @app.post("/agent/init")
@@ -169,7 +179,10 @@ async def agent_init(payload: dict):
     shortlist SMS has to go.
     """
     sid = secrets.token_urlsafe(6)
-    caller = _nested_get(payload, "caller_id", "from_number", "from", "caller")
+    caller = _nested_get(payload, "caller_id", "from_number", "from", "caller",
+                         "caller_phone", "user_id", "system__caller_id")
+    if caller and not calls.E164.match(caller):
+        caller = ""
     called = _nested_get(payload, "called_number", "to_number", "agent_number")
 
     def write(s):
@@ -196,6 +209,9 @@ async def agent_preferences(payload: dict):
     sid = _ensure_session(payload)
     first = store.get(sid) is None
     fields = {k: v for k, v in payload.items() if k in Preferences.model_fields and v is not None}
+    for key in ("areas", "priority_order", "extra_questions"):
+        if key in fields:
+            fields[key] = _as_list(fields[key])
     phone = _apply_caller(payload)
 
     def write(s):
@@ -279,8 +295,8 @@ def _resolve_listing_id(payload: dict, session_id: str) -> str:
 async def agent_start_calls(payload: dict):
     """Verify these listings. Fan out. Cards flip to CALLING before any await."""
     sid = _ensure_session(payload)
-    ids = _resolve_ids(payload.get("listing_ids") or [], sid)
-    extra = payload.get("extra_questions") or []
+    ids = _resolve_ids(_as_list(payload.get("listing_ids")), sid)
+    extra = _as_list(payload.get("extra_questions"))
     phone = _apply_caller(payload)
 
     if not calls.within_business_hours():
@@ -320,8 +336,13 @@ async def agent_outcome(payload: dict):
     if existing and existing.outcome is not None:
         return {"speak": "Got it.", "session_id": sid, "agent_says": s.agent_says if s else ""}
 
-    oc = CallOutcome(**{k: v for k, v in payload.items()
-                        if k in CallOutcome.model_fields and v is not None})
+    raw = {k: v for k, v in payload.items()
+           if k in CallOutcome.model_fields and v is not None}
+    if "addons" in raw:
+        raw["addons"] = _as_list(raw["addons"])
+    if isinstance(raw.get("answers"), str):
+        raw["answers"] = {"notes": raw["answers"]}
+    oc = CallOutcome(**raw)
 
     def write(st_):
         for st in st_.listings:
@@ -355,6 +376,26 @@ async def agent_book(payload: dict):
     await store.mutate(sid, write)
     await calls.sms(sid, f"Confirmed: {where}, {slot}. {WEB_URL}/s/{sid}")
     return {"speak": spoken, "session_id": sid}
+
+
+@app.post("/agent/sms")
+async def agent_sms(payload: dict):
+    """Text the shortlist link. The model only calls this; Twilio sends it."""
+    sid = _ensure_session(payload)
+    phone = _apply_caller(payload)
+    link = f"{WEB_URL}/s/{sid}"
+
+    def write(s):
+        if phone and not s.caller_phone:
+            s.caller_phone = phone
+
+    await store.mutate(sid, write)
+    sent = await calls.sms(sid, f"Your shortlist: {link}")
+    spoken = ("I've texted you the link. Have a look while we talk."
+              if sent else
+              "I couldn't text that number. What's a good mobile, with country code?")
+    await store.mutate(sid, lambda s_: setattr(s_, "agent_says", spoken))
+    return {"speak": spoken, "session_id": sid, "sent": sent, "link": link}
 
 
 @app.post("/agent/email")
