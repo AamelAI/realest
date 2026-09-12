@@ -126,20 +126,13 @@ async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list
 
     async def one(lid: str):
         try:
-            if transport.is_eleven():
-                # Real call. Same extraction, same re-rank - only the dial tone
-                # is different from the stub path.
-                transcript = await asyncio.wait_for(
-                    transport.eleven_call(lid, extra_questions), timeout=180
-                )
-            elif transport.is_stub():
+            if transport.is_stub():
                 # A scripted listing agent answers. The transcript still goes
                 # through the real extract_outcome() and the real re-rank -
                 # only the dial tone is fake.
                 transcript = await asyncio.wait_for(
                     transport.stub_call(lid, extra_questions), timeout=CALL_TIMEOUT
                 )
-            if transport.is_eleven() or transport.is_stub():
                 if transcript is None:
                     await mark_no_answer(session_id, lid, extra_questions)
                     return None
@@ -150,10 +143,15 @@ async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list
                     **oc.model_dump(mode="json"),
                 })
                 return lid
+            # Real call. place_call() picks ElevenLabs vs. Twilio Realtime and,
+            # for ElevenLabs, schedules watch_listing_call() to poll the
+            # conversation and feed the outcome back through agent_outcome()
+            # once it lands - the outcome is not available synchronously here.
             return await asyncio.wait_for(
                 place_call(session_id, lid, extra_questions), timeout=CALL_TIMEOUT
             )
         except Exception as exc:
+            log.warning("fan_out[%s/%s]: call failed: %s", session_id, lid, exc)
             await mark_no_answer(session_id, lid, extra_questions)
             return exc
 

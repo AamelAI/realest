@@ -51,10 +51,15 @@ def use_fake_twilio(fail_times: int = 0) -> FakeClient:
 
 def reset_sms_module_state() -> None:
     """These are process-lifetime dedupe/tracking dicts - clear between tests
-    so one test's session ids can't leak into the next."""
+    so one test's session ids can't leak into the next. SMS_LINK_DELAY_S is
+    also module state: an earlier section sets it to 0/0.05 to avoid a real
+    sleep, and leaving it there races record_preferences' own immediate
+    shortlist SMS against the delayed sms_if_call_alive() one, sending the
+    link twice instead of the second being deduped as in real timing."""
     calls._ended.clear()
     calls._link_sms_started.clear()
     calls._recent_sms.clear()
+    calls.SMS_LINK_DELAY_S = 5
 
 
 async def new_session(sid: str, phone: str = "+14165551234"):
