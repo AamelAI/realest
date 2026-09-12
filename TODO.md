@@ -1,121 +1,137 @@
 # TODO — build day
 
-Steps run in order. Within a step, the three lanes run in parallel.
-
 **Mark a task done by putting its id in your commit message:**
 
 ```bash
-git commit -m "[1.4] outbound call places and rings"
+git commit -m "[1.4] tool dispatch wired"
 ```
 
-Then `make todo` shows the board. Nobody edits this file during the build — progress is derived from git log, so there's nothing to merge-conflict on.
-
-| Lane | Owns | Name |
-|---|---|---|
-| **D1** | The ear + the store — inbound voice, `SessionState`, preference extraction | |
-| **D2** | The second line — outbound calls, `CallOutcome`, SMS, email | |
-| **D3** | The page — listings, ranking, the live surface | |
+`make todo` derives the board from `git log`. Nobody edits this file during the build.
 
 ---
 
-## Step 0 — keys and first ring · before 11:15
+## The seam
 
-Nothing else can start until `0.4` rings. If it doesn't by 11:45, take the fallback in `0.9`.
+Everything routes through one function:
 
-- `0.1` **D1** — ngrok authtoken for the account holding `zipping-scarf-actress.ngrok-free.dev`; `ngrok config add-authtoken <token>` · *done when:* `make tunnel-test` prints OK
-- `0.2` **D1** — Twilio account, buy a 416/647 number with **Voice + SMS** · *done when:* number shows both capabilities
-- `0.3` **D1** — add all three teammate phones to **Verified Caller IDs** · *done when:* all three listed
-- `0.35` **D1** — `make keys` — confirm the OpenAI key reaches the **API**, not just Codex · *done when:* it prints a realtime model, or you've picked a fallback in `docs/VOICE_FALLBACK.md`
-- `0.4` **D1** — `OPENAI_API_KEY` + `TWILIO_*` into `.env`; `make bridge` · `make tunnel` · `make spike TO=…` · *done when:* **your phone rings, the agent speaks, and it stops when you interrupt**
-- `0.5` **D2** — create the **public submission repo**, push access for all three · *done when:* everyone can push
-- `0.6` **D2** — `make install`; `make listings PHONE=… EMAIL=…`; `make seed` · *done when:* `make doctor` green
-- `0.7` **D3** — Vercel project on `web/`, set `BACKEND_URL` env var · *done when:* blank page live at a real URL
-- `0.8` **ALL** — pick the four demo listings from `make preview`, note the ids · *done when:* one dead, one with add-ons, one cats-only, one filler
-- `0.9` **ALL** — if `0.4` fails by 11:45: switch inbound to browser-mic WebRTC, keep outbound calls · *done when:* decision made out loud
+```python
+dispatch(tool_name: str, args: dict, session_id: str) -> str   # spoken/shown reply
+```
 
----
+**Voice and text both call it.** D1/D2/D3 build the entire product against a **text chat** LLM. D4 builds the voice transport in parallel and swaps it in at Step 4. Nobody blocks on a phone.
 
-## Step 1 — the loop works with zero web · target 12:15
+Same for outbound calls — `CallTransport.place_call()` has a **stub** implementation returning canned transcripts. D2 builds the whole call→outcome→re-rank loop against the stub; D4 replaces it with the real thing.
 
-- `1.0` **ALL** — agree the `SessionState` shape, five minutes, then freeze it · *done when:* committed and pushed
-- `1.1` **D1** — `state.py`: store, `mutate()` with the lock, `get()` · *done when:* two concurrent writes don't clobber
-- `1.2` **D1** — `POST /agent/preferences` → extract → re-rank → speak back · *done when:* `curl` sets preferences, state reflects them
-- `1.3` **D1** — renter prompt + `record_preferences` tool dispatching in-process · *done when:* you talk, the bridge logs the call with arguments
-- `1.4` **D2** — `place_call()`, session/listing carried in the TwiML query string · *done when:* `curl` your server, a teammate's phone rings
-- `1.5` **D2** — listing-agent prompt, identifies as AI in sentence one · *done when:* it asks availability, real cost, pets
-- `1.6` **D3** — `listings.load()` + `rank()` · *done when:* the three fixtures pass
-- `1.7` **D3** — `GET /api/state` serialized · *done when:* enums come out as strings
+| Lane | Owns |
+|---|---|
+| **D1** | The brain + the store — `SessionState`, `dispatch()`, the text chat loop |
+| **D2** | Calls — `CallTransport`, `CallOutcome` extraction, re-rank trigger, email fallback |
+| **D3** | Data + the page — listings, `rank()`, the live surface |
+| **D4** | Voice, solely — Twilio, the bridge, TwiML, both call directions |
 
 ---
 
-## Step 2 — SMS and the page · target 12:45
+## Already done (last night)
 
-- `2.1` **D2** — SMS fires **5s into the call**, cancels if it already ended · *done when:* link arrives while you're still talking
-- `2.2` **D3** — `/s/[sid]` server-rendered card list with photos · *done when:* opens on a real phone over cellular
-- `2.3` **D3** — `/api/state` proxy route on Vercel · *done when:* the phone never resolves ngrok
+`0.1` ngrok static domain · `0.35` key probe (`make keys`) · `0.6` deps + 124 listings · page template built (`web/`, ledger design) · public repo `AamelAI/realest` created
 
 ---
 
-## Step 3 — a call result lands · target 13:15
+## Step 0 — unblock · now
 
-*The minimum version of the whole idea. If you stop here you still have a submission.*
-
-- `3.1` **D2** — `extract_outcome()` via structured outputs · *done when:* never invents a field; `source` always set
-- `3.2` **D1** — `POST /agent/outcome` writes, then re-ranks **the whole list** · *done when:* status changes and order changes
-- `3.3` **D3** — six card states, readable at video scale · *done when:* dead sinks and reads as dead from across a room
-
----
-
-## Step 4 — live sync · **Gate: 13:30**
-
-- `4.1` **D3** — `usePolling` at 1–1.5s, `no-store`, diff before `setState` · *done when:* reorder visible while someone is still speaking
-- `4.2` **D3** — reorder animation, Framer Motion `layout`, ~300ms · *done when:* positions interpolate, no snap
-- `4.3` **D1** — `POST /agent/book`, plain code does the write · *done when:* status booked, SMS confirmation sent
-
-> **13:30 gate:** one conversation ends in a booking with the page live. If not, freeze here and go to Step 7.
+- `0.2` **D4** — Twilio number (416/647, Voice + SMS) + all three phones in **Verified Caller IDs**
+- `0.5` **D1** — push the `base` scaffold into `AamelAI/realest`, everyone works from there · *done when:* all four have pulled it
+- `0.7` **D3** — Vercel project on `web/`, set `BACKEND_URL` · *done when:* page live at a real URL
+- `0.8` **ALL** — pick the four demo listings from `make preview` · *done when:* one dead, one with add-ons, one cats-only, one filler
 
 ---
 
-## Step 5 — tap to confirm
+## Step 1 — the agent works over text · target 12:45
 
-- `5.1` **D3** — checkboxes + one **Call these** button · *done when:* posts ids to `/agent/start-calls`
-- `5.2` **D2** — `fan_out()`: flip to `CALLING` before awaiting, 90s timeout each, `return_exceptions=True` · *done when:* three cards go live simultaneously
+*No phone involved. If this lands, the product exists.*
 
----
-
-## Step 6 — only if ahead at 13:30
-
-- `6.1` **D2** — hour-of-day check: agent **declines to dial** outside 9–19 and says why
-- `6.2` **D2** — `draft_email()` on no-answer, shown on the card with a Send button
-- `6.3` **D1** — OpenRouter preset fallback on the reasoning path
-- `6.4` **D3** — Exa enrichment: transit, building reputation
-
----
-
-## Step 7 — rehearse, then freeze · 13:30–14:30
-
-- `7.1` **ALL** — run the full script end to end, three times · *done when:* no stumbles
-- `7.2` **D2** — record a **clean backup take at 14:00** while the build still works
-- `7.3` **ALL** — no-answer → email beat on camera
-
-> **14:30 — feature freeze.** Nothing built after this reaches a judge.
+- `1.0` **ALL** — agree `SessionState` + the `dispatch()` signature, five minutes, freeze it · *done when:* pushed
+- `1.1` **D1** — `state.py`: store, `mutate()` with a lock, `get()` · *done when:* two concurrent writes don't clobber
+- `1.2` **D1** — `dispatch()` — routes the four tools in `agent/tools.json` to real functions, returns a short spoken-style string · *done when:* `curl` fires each tool by name
+- `1.3` **D1** — `POST /chat` — text in → LLM with tools → dispatch → text out, per session · *done when:* you can hold the whole demo conversation by typing
+- `1.4` **D3** — `listings.load()` + `rank()` · *done when:* three fixtures pass (`.claude/skills/ranking/`)
+- `1.5` **D3** — `GET /api/state` serialized · *done when:* enums come out as strings
+- `1.6` **D2** — `CallTransport` interface + `StubTransport` returning canned transcripts after a delay · *done when:* the stub returns the Wellington add-ons transcript
+- `1.7` **D4** — `make bridge` + `make tunnel` + `make spike TO=…` · *done when:* **your phone rings and the agent speaks**
 
 ---
 
-## Step 8 — the submission · 14:30–15:10
+## Step 2 — a call changes the ranking · target 13:15
 
-*Read `.claude/skills/submit/` first.*
+*Still no phone. This is the minimum complete submission.*
 
-- `8.1` **D1** — README: hook, GIF, **both call transcripts in full**, architecture diagram, prior art, ethics line, built-today-vs-scaffolded
-- `8.2` **D3** — the two-minute video, three takes minimum
-- `8.3` **D2** — written description + **social post** tagging OpenAI, Georgian, CopilotKit, OpenRouter, AI Tinkerers, Human Feedback Foundation
-- `8.4` **D1** — push to the **public** repo, verify it loads signed out
-- `8.5` **ALL** — submit by 15:10, verify all five items present
+- `2.1` **D2** — `start_calls` → transport → `extract_outcome()` via structured outputs · *done when:* never invents a field, `source` always set
+- `2.2` **D1** — outcome lands in state → **re-rank the whole list** · *done when:* the top pick dies and the order visibly changes
+- `2.3` **D2** — `book_viewing` → plain-code write → status booked
+- `2.4` **D4** — outbound TwiML + `place_call()` against a real number · *done when:* a teammate's phone rings from code
 
 ---
 
-## If you fall behind
+## Step 3 — the page goes live · target 13:45
 
-Cut in this order: Step 6 entirely → three calls become one perfect call → the animation → tap-to-confirm → live polling becomes refresh-to-update.
+- `3.1` **D3** — point `BACKEND_URL` at the tunnel, `/s/[sid]` renders real state · *done when:* opens on a phone over cellular
+- `3.2` **D3** — polling on, reorder animates · *done when:* the shortfall reorders while you type
+- `3.3` **D1** — SMS the session link · *done when:* link arrives on a real phone
+- `3.4` **D4** — listing-agent prompt, identifies as AI in sentence one
 
-**Never cut:** the outbound call, the re-rank from a call outcome, or Step 8.
+---
+
+## Step 4 — swap voice in · target 14:00
+
+*One line changes. Everything else is already proven.*
+
+- `4.1` **D4** — `VoiceTransport` replaces `StubTransport` behind the same interface · *done when:* a real call produces a real `CallOutcome`
+- `4.2` **D4** — inbound voice calls `dispatch()`, same as `/chat` · *done when:* speaking does what typing does
+- `4.3` **ALL** — end-to-end on the phone once · *done when:* call → shortlist → call out → reshuffle → booking
+
+> **If `4.1` isn't landing by 14:00, stop and demo the text path.** See "If voice doesn't land" below.
+
+---
+
+## Step 5 — only if ahead
+
+- `5.1` **D2** — three calls in parallel (`asyncio.gather`, flip to CALLING before awaiting)
+- `5.2` **D2** — email fallback on no-answer + hour-of-day check
+- `5.3` **D3** — tap-to-confirm posts to `/agent/start-calls`
+- `5.4` **D3** — Exa enrichment
+
+---
+
+## Step 6 — rehearse, freeze · 14:00–14:30
+
+- `6.1` **ALL** — run the full script end to end, three times
+- `6.2` **D4** — record a **clean backup take** while it works
+- `6.3` **ALL** — put a failure on camera (no-answer, or a low-confidence outcome)
+
+> **14:30 — feature freeze.**
+
+---
+
+## Step 7 — the submission · 14:30–15:10
+
+- `7.1` **D1** — README: hook, GIF, **both transcripts in full**, architecture diagram, prior art, ethics line, built-today-vs-scaffolded
+- `7.2` **D3** — the two-minute video, three takes minimum
+- `7.3` **D2** — written description + **social post** tagging OpenAI, Georgian, CopilotKit, OpenRouter, AI Tinkerers, Human Feedback Foundation
+- `7.4` **D4** — verify `AamelAI/realest` is public and loads signed out
+- `7.5` **ALL** — submit by 15:10, all five items present
+
+---
+
+## If voice doesn't land
+
+The text path is a complete product and it demos. But **the submission's central claim is that the agent phones a human and learns something no listing contains.** Without a real call that claim weakens badly.
+
+Priority if you have to choose: **the outbound call to a listing agent matters more than inbound voice.** A demo where you *type* your preferences and the agent *phones a real person* keeps the whole pitch. The reverse does not.
+
+So if D4 can only land one leg, land outbound.
+
+## Cut order
+
+Step 5 entirely → parallel calls become one call → reorder animation → live polling becomes refresh-to-update → inbound voice becomes text.
+
+**Never cut:** the outbound call, the re-rank from a call outcome, or Step 7.
