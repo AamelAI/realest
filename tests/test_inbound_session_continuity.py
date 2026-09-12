@@ -28,6 +28,23 @@ import main  # noqa: E402
 import state as store  # noqa: E402
 
 
+class _FakeInitRequest:
+    """agent_init() now takes the real FastAPI Request so it can also parse
+    form/query-encoded init webhooks (see server/main.py:_request_payload).
+    These tests only need the JSON-body path, so a minimal stand-in with an
+    async json() is enough - no need to spin up TestClient/ASGI for this."""
+
+    def __init__(self, payload: dict) -> None:
+        self._payload = payload
+
+    async def json(self) -> dict:
+        return self._payload
+
+
+async def _init(payload: dict) -> dict:
+    return await main.agent_init(_FakeInitRequest(payload))
+
+
 def test_session_id_from_init_carries_listings_to_the_same_session() -> None:
     """The path a correctly-wired dynamic variable takes: /agent/init mints a
     session and texts its link, then every later tool call - carrying that
@@ -35,7 +52,7 @@ def test_session_id_from_init_carries_listings_to_the_same_session() -> None:
     guarantees - writes into it. /api/state for that id must show the
     shortlist the SMS link points to."""
     async def run() -> None:
-        init = await main.agent_init({"caller_id": "+14165551234"})
+        init = await _init({"caller_id": "+14165551234"})
         sid = init["dynamic_variables"]["session_id"]
         assert sid, "agent_init must mint a session_id"
 
@@ -61,7 +78,7 @@ def test_send_sms_recovers_the_init_session_via_caller_phone() -> None:
     not mint an empty new one."""
     async def run() -> None:
         phone = "+14165559999"
-        init = await main.agent_init({"caller_id": phone})
+        init = await _init({"caller_id": phone})
         sid = init["dynamic_variables"]["session_id"]
 
         await main.agent_preferences({"session_id": sid, "beds": 2, "max_rent": 4000})
