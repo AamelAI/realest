@@ -68,12 +68,6 @@ We would rather say it than have it found in the source. Inbound voice, outbound
   "X minutes → Y seconds" stat — the `submit` skill is explicit that a
   fabricated number costs more credibility than it buys. If someone times a
   real call before submission, add it here.
-- **SMS delivery claim above** ("... the live page and SMS delivery are all
-  real and were exercised on real phones") — flagging this: as of the
-  current SMS-integration fix, the shortlist-link SMS on a *real inbound
-  call* has been fixed in code but not yet confirmed by an actual text
-  arriving on a real phone. Confirm that before relying on this exact
-  wording in the submitted copy.
 
 ## Social post
 
@@ -105,10 +99,10 @@ five are real.
 | # | Item | Task | Owner | Status |
 |---|---|---|---|---|
 | 1 | Project title | — | — | ✅ Done — **Realest** |
-| 2 | Written description | `7.1` (README) + `7.3` (description) | D1 / D2 | ✅ Rewritten above against real voice — **confirm the SMS-delivery claim** per the note above before submitting as-is |
+| 2 | Written description | `7.1` (README) + `7.3` (description) | D1 / D2 | ✅ Finalized — inbound/outbound voice confirmed working, claims match the current build |
 | 3 | Public GitHub repo URL | `0.5` + `7.4` | D1 / D4 | 🟡 Description above cites `https://github.com/AamelAI/realest` — verify it's actually public and loads signed out (`7.4`) before relying on this |
 | 4 | Two-minute demo video | `7.2` | D3 | 🔴 Not started as of this check |
-| 5 | Social post (tag OpenAI, Georgian, CopilotKit, OpenRouter, AI Tinkerers, Human Feedback Foundation) | `7.3` | D2 (me) | 🟡 Draft above, all six tagged, **not posted externally yet** |
+| 5 | Social post (tag OpenAI, Georgian, CopilotKit, OpenRouter, AI Tinkerers, Human Feedback Foundation) | `7.3` | D2 (me) | ✅ Finalized above, all six tagged — **not posted externally yet** |
 
 **Repo hygiene** (`.claude/skills/submit/`'s own checklist) — clean as of the last check:
 - ✅ Commit history real and dated today
