@@ -48,16 +48,24 @@ class CallOutcome(BaseModel):
 class Listing(BaseModel):
     listing_id: str
     address: str
-    rent: int
+    rent: int                       # entry price; the REAL cost comes back from the call
     beds: int
     baths: int
-    parking_included: bool
+    neighbourhood: str = ""         # the ranker filters on this
+    property_type: str = ""
+    sqft: int | None = None
+    parking_included: bool = False  # what the LISTING claims - the call often disagrees
     pets: str | None = None
     amenities: list[str] = Field(default_factory=list)
     transit_note: str = ""
-    photo_url: str = ""
+    photos: list[str] = Field(default_factory=list)
+    photo_url: str = ""             # hero image for the card
+    source_url: str = ""
     agent_name: str = ""
-    agent_phone: str = ""   # always a teammate's number. We never cold-call strangers.
+    # Always our own demo contacts. We never cold-call strangers, and real agents'
+    # details must not land in a repo that goes public at submission.
+    agent_phone: str = ""
+    agent_email: str = ""
 
 
 class ListingState(BaseModel):

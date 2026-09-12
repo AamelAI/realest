@@ -1,4 +1,4 @@
-.PHONY: dev tunnel web seed check install doctor help
+.PHONY: dev tunnel web seed check listings install doctor help
 
 help:
 	@grep -E '^[a-z]+:' Makefile | grep -v '^\.PHONY' | sed 's/:.*//' | sed 's/^/  make /'
@@ -15,6 +15,9 @@ tunnel:             ## public URL the voice provider can reach
 
 web:                ## Next.js on :3000
 	cd web && npm run dev
+
+listings:           ## rebuild listings from the raw scrape: make listings PHONE=+1416... EMAIL=you@x.com
+	uv run python scripts/scrape_rentals.py --phone "$(PHONE)" --email "$(EMAIL)"
 
 seed:               ## validate + write data/listings.json
 	uv run python scripts/seed.py
