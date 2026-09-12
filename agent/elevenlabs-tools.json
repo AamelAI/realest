@@ -15,8 +15,12 @@
           "properties": {
             "session_id": {
               "type": "string",
-              "description": "Dynamic variable {{session_id}}. Do not invent this.",
-              "dynamic_variable": "session_id"
+              "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it."
+            },
+            "caller_phone": {
+              "type": "string",
+              "description": "Inbound caller from system__caller_id. Do not invent it.",
+              "dynamic_variable": "system__caller_id"
             },
             "beds": { "type": "integer", "description": "Bedrooms wanted." },
             "baths": { "type": "integer", "description": "Bathrooms wanted." },
@@ -34,14 +38,14 @@
               "description": "What matters most FIRST, e.g. [transit, price, parking]."
             }
           },
-          "required": ["session_id"]
+          "required": []
         }
       }
     },
     {
       "type": "webhook",
       "name": "start_calls",
-      "description": "Call this when the caller has confirmed which listings they want verified, or when they give a number to call as the listing agent (e.g. 4375550100). BEFORE calling it, always ask whether there is anything else they want asked on the call.",
+      "description": "Call this when the caller wants you to phone a listing agent, verify a listing, or call 4375550100. Omit listing_ids to call the current shortlist. Wait for the result and read the speak field aloud.",
       "api_schema": {
         "url": "{PUBLIC_URL}/agent/start-calls",
         "method": "POST",
@@ -106,7 +110,8 @@
             },
             "caller_phone": {
               "type": "string",
-              "description": "Caller's mobile in E.164, e.g. +14165551234."
+              "description": "Inbound caller from system__caller_id. Do not invent it.",
+              "dynamic_variable": "system__caller_id"
             }
           },
           "required": []

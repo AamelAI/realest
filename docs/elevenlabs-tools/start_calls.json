@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "start_calls",
-  "description": "Call this only after the caller confirmed which listings to verify, or when they give a number to call as the listing agent (e.g. 4375550100). BEFORE calling it, ask if there is anything else they want asked on those calls. After it returns, read the speak field aloud. listing_ids are real ids from the last record_preferences shortlist (like L061), or the demo listing-agent number.",
+  "description": "Call this when the caller wants you to phone a listing agent, verify a listing, or call 4375550100. Omit listing_ids to call the current shortlist. Wait for it to return — the listing call may take a minute — then read the speak field aloud.",
   "api_schema": {
     "url": "https://zipping-scarf-actress.ngrok-free.dev/agent/start-calls",
     "method": "POST",
@@ -27,11 +27,11 @@
         {
           "id": "listing_ids",
           "type": "string",
-          "description": "Real listing ids from the shortlist, comma-separated, e.g. L061, L003. Or the listing-agent number to dial, e.g. 4375550100.",
+          "description": "Real listing ids from the shortlist, comma-separated, e.g. L061, L003. Or the listing-agent number to dial, e.g. 4375550100. Omit to call the current shortlist.",
           "dynamic_variable": "",
           "constant_value": "",
           "value_type": "llm_prompt",
-          "required": true,
+          "required": false,
           "enum": null
         },
         {
@@ -51,7 +51,7 @@
     "auth_connection": null,
     "response_filter": null
   },
-  "response_timeout_secs": 60,
+  "response_timeout_secs": 120,
   "follow_redirects": false,
   "follow_redirects_allowed_domains": [],
   "dynamic_variables": {
