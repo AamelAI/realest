@@ -33,12 +33,12 @@ OUT_OF_HOURS = (
 
 E164 = re.compile(r"^\+[1-9]\d{7,14}$")
 
-# session_id -> listing-agent number the caller asked us to dial (e.g. 4375550100)
+# session_id -> listing-agent number the caller asked us to dial (e.g. +111111111111)
 _session_dest: dict[str, str] = {}
 
 
 def as_e164(raw: str) -> str:
-    """Accept +14375550100, 4375550100, or 1-437-555-0100. Empty if not a phone."""
+    """Accept +1+111111111111, +111111111111, or 1-437-555-0100. Empty if not a phone."""
     if not raw:
         return ""
     raw = str(raw).strip()
@@ -64,16 +64,13 @@ def set_session_dest(session_id: str, phone: str) -> str:
 
 def destination(session_id: str, listing) -> str:
     """Where the listing agent call actually goes.
-
-    Caller-stated number (\"call 4375550100\") wins, then DEMO_AGENT_PHONE,
-    then the listing's own teammate number.
     """
     override = _session_dest.get(session_id) or as_e164(os.getenv("DEMO_AGENT_PHONE", ""))
     if override:
         return override
     if listing and listing.agent_phone:
         return as_e164(listing.agent_phone) or listing.agent_phone
-    return as_e164(os.getenv("DEMO_AGENT_PHONE", "")) or "+14375550100"
+    return as_e164(os.getenv("DEMO_AGENT_PHONE", ""))
 
 
 def unique_destinations(session_id: str, listing_ids: list[str]) -> list[str]:

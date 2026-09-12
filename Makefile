@@ -1,4 +1,4 @@
-.PHONY: dev tunnel web seed check listings preview bridge spike eleven-spike eleven-tools tools install doctor help
+.PHONY: pull reload dev tunnel web seed check listings preview bridge spike eleven-spike eleven-tools tools install doctor help
 
 help:
 	@grep -E '^[a-z]+:' Makefile | grep -v '^\.PHONY' | sed 's/:.*//' | sed 's/^/  make /'
@@ -7,6 +7,14 @@ install:            ## one-time: python deps + web deps + git hooks
 	uv sync
 	cd web && npm install
 	@git config core.hooksPath .githooks && echo "✓ commit-msg hook enabled (nudges for [task-id])"
+
+pull:               ## git pull + sync deps + nudge uvicorn reload (keep make dev running)
+	git pull --ff-only
+	uv sync
+	@$(MAKE) reload
+
+reload:             ## force uvicorn --reload to restart (no-op if make dev isn't running)
+	@touch server/main.py && echo "✓ touched server/main.py — uvicorn --reload should restart"
 
 dev:                ## FastAPI on :8000
 	uv run uvicorn main:app --reload --port 8000 --app-dir server
