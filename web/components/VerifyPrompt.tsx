@@ -8,6 +8,8 @@ const ASKS = [
 ] as const;
 
 export const DEFAULT_ASKS: string[] = ASKS.slice(0, 3);
+/** Used to tell our own canned chips apart from something the renter said. */
+export const ALL_ASKS: string[] = [...ASKS];
 
 /**
  * The approval gate. Voice asked "anything else you want me to ask?"; this is
@@ -21,6 +23,7 @@ export function VerifyPrompt({
   spokenAsk,
   onCall,
   sending,
+  failed = false,
 }: {
   count: number;
   asks: string[];
@@ -29,6 +32,8 @@ export function VerifyPrompt({
   spokenAsk: string;
   onCall: () => void;
   sending: boolean;
+  /** the last attempt to start calls did not reach the backend */
+  failed?: boolean;
 }) {
   return (
     <section
@@ -87,8 +92,17 @@ export function VerifyPrompt({
       >
         {sending
           ? "Dialling…"
-          : `Call ${count} agent${count === 1 ? "" : "s"} now`}
+          : count === 0
+            ? "Pick a listing to call"
+            : `Call ${count} agent${count === 1 ? "" : "s"} now`}
       </button>
+
+      {failed && (
+        <p className="mt-2 text-[11.5px]" style={{ color: "var(--color-warn)" }}>
+          That didn&rsquo;t reach the line. Your picks are still here — try again, or just
+          tell the agent out loud.
+        </p>
+      )}
     </section>
   );
 }

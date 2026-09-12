@@ -14,6 +14,10 @@ import type { Card } from "@/lib/types";
  * "dialing / ringing / connected"; our backend does not know which of those is
  * true, and inventing it would undercut the one claim the product rests on.
  */
+/** Only a call a human picked up gets an "answered" duration. */
+const answered = (c: Card) =>
+  c.status === "verified" || c.status === "booked" || c.status === "dead";
+
 export function CallsPanel({
   cards,
   elapsed,
@@ -44,9 +48,14 @@ export function CallsPanel({
         <span className="text-[12.5px] font-semibold text-white">
           {live > 0 ? `${live} call${live === 1 ? "" : "s"} in progress` : `${cards.length} call${cards.length === 1 ? "" : "s"} complete`}
         </span>
-        <span className="ml-auto font-mono text-[11px] tnum" style={{ color: "rgba(255,255,255,.6)" }}>
-          {live > 0 ? clock(longest) : `all answered · ${clock(longest)}`}
-        </span>
+        {/* Only ever show a duration this browser actually measured. A page
+            opened after the calls finished never saw them ring, and printing
+            0:00 would be inventing a fact. */}
+        {longest > 0 && (
+          <span className="ml-auto font-mono text-[11px] tnum" style={{ color: "rgba(255,255,255,.6)" }}>
+            {clock(longest)}
+          </span>
+        )}
       </div>
 
       {cards.map((card, i) => {
@@ -71,8 +80,10 @@ export function CallsPanel({
               </div>
               <span className="shrink-0 font-mono text-[11px] tnum" style={{ color: s.fg }}>
                 {card.status === "calling"
-                  ? `on the call · ${clock(secs ?? 0)}`
-                  : secs
+                  ? secs !== undefined
+                    ? `on the call · ${clock(secs)}`
+                    : "on the call"
+                  : answered(card) && secs
                     ? `answered ${secs}s`
                     : s.short}
               </span>
