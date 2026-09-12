@@ -58,7 +58,10 @@ EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 AREAS: list[tuple[tuple[str, ...], str, str]] = [
     (("ordnance", "strachan", "niagara st", "east liberty", "hanna", "pirandello"),
      "Liberty Village", "6 min to Exhibition GO"),
-    (("adelaide", "spadina ave", "wellington", "king st", "portland", "bathurst st"),
+    # NB: "bathurst st" is deliberately NOT here. It matched before North York's
+    # rule and labelled every Bathurst address in the city King West - including
+    # 6020 Bathurst, which is at Steeles. It polluted the demo shortlist.
+    (("adelaide", "spadina ave", "wellington", "king st", "portland"),
      "King West", "4 min to King streetcar"),
     (("queens quay", "mill street", "cherry", "eastern ave", "lower jarvis"),
      "Waterfront", "9 min to Union Station"),

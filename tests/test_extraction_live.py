@@ -1,8 +1,10 @@
-"""Optional: exercises the REAL extract_outcome() path against the actual
-OpenAI API. Skips cleanly if no key is configured - never required for CI or
-a teammate's machine.
+"""Optional: exercises the REAL extract_outcome() path against whichever
+provider server/chat.py picks up from the environment (OpenAI, OpenRouter, or
+Gemini via its OpenAI-compatible endpoint). Skips cleanly if no key is
+configured for any of them - never required for CI or a teammate's machine.
 
-    OPENAI_API_KEY=sk-... PYTHONPATH=server python3 tests/test_extraction_live.py
+    uv run pytest tests/test_extraction_live.py -q
+    GEMINI_API_KEY=... python3 tests/test_extraction_live.py    # also standalone
 """
 from __future__ import annotations
 
@@ -11,11 +13,12 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
+import pytest
+from dotenv import load_dotenv
 
-if not os.getenv("OPENAI_API_KEY"):
-    print("SKIP: no OPENAI_API_KEY in the environment - set it in .env or export it, then rerun.")
-    raise SystemExit(0)
+ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(ROOT / ".env")
+sys.path.insert(0, str(ROOT / "server"))
 
 import calls  # noqa: E402
 
@@ -31,26 +34,28 @@ TRANSCRIPT = (
     "Us: Understood, thanks for your time."
 )
 
-ok = True
+_HAS_KEY = any(os.getenv(k, "").strip() for k in
+               ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY"))
 
 
-def check(label: str, cond: bool, detail: str = "") -> None:
-    global ok
-    print(("  \033[32mPASS\033[0m " if cond else "  \033[31mFAIL\033[0m ") + label + (f"  {detail}" if detail else ""))
-    ok = ok and cond
-
-
-async def run() -> None:
-    oc = await calls.extract_outcome(TRANSCRIPT, ["is there a locker?"])
+@pytest.mark.skipif(not _HAS_KEY, reason="no OPENAI_API_KEY / OPENROUTER_API_KEY / "
+                                          "GEMINI_API_KEY in the environment")
+def test_extract_outcome_live() -> None:
+    oc = asyncio.run(calls.extract_outcome(TRANSCRIPT, ["is there a locker?"]))
     print("  extracted:", oc.model_dump())
-    check("available = True", oc.available is True)
-    check("addons mention parking $180", any("180" in a for a in oc.addons))
-    check("pets_allowed captured, not invented as something else",
-          bool(oc.pets_allowed) and "no" in oc.pets_allowed.lower())
-    check("source populated", bool(oc.source))
-    check("raw_transcript preserved", oc.raw_transcript == TRANSCRIPT)
+
+    assert oc.available is True
+    assert any("180" in a for a in oc.addons), "expected the $180 parking add-on"
+    assert oc.pets_allowed and "no" in oc.pets_allowed.lower(), \
+        "pets_allowed should reflect what was actually said, not be invented"
+    assert oc.source, "source must always be populated"
+    assert oc.raw_transcript == TRANSCRIPT
 
 
-asyncio.run(run())
-print("\n\033[32mlive extraction checks pass\033[0m\n" if ok else "\n\033[31mLIVE EXTRACTION CHECKS FAILING\033[0m\n")
-raise SystemExit(0 if ok else 1)
+if __name__ == "__main__":
+    if not _HAS_KEY:
+        print("SKIP: no OPENAI_API_KEY / OPENROUTER_API_KEY / GEMINI_API_KEY in the "
+              "environment - set one in .env or export it, then rerun.")
+        raise SystemExit(0)
+    test_extract_outcome_live()
+    print("\n\033[32mlive extraction checks pass\033[0m\n")

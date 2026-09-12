@@ -16,7 +16,7 @@ from openai import AsyncOpenAI
 
 import listings as L
 import state as store
-import transport as T
+import transport
 from schemas import CallOutcome, CallStatus
 
 log = logging.getLogger("realest.calls")
@@ -45,8 +45,13 @@ def _twilio():
 
 
 def _openai() -> AsyncOpenAI | None:
-    key = os.getenv("OPENAI_API_KEY")
-    return AsyncOpenAI(api_key=key) if key else None
+    """Whichever provider has a key. Shared with server/chat.py so extraction
+    works on OpenAI, OpenRouter or Gemini without a second code path."""
+    import chat
+    try:
+        return chat._client()[0]
+    except RuntimeError:
+        return None
 
 
 def within_business_hours(now: datetime | None = None) -> bool:
@@ -84,16 +89,29 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
 
 async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list[str]) -> list:
     """Three at once. Cards are already CALLING before we get here - that
-    simultaneity is the shot. One failure must never kill the rest.
-
-    Goes through CallTransport (real Twilio, or the deterministic stub) so
-    this loop never has to wait on a phone to be testable."""
-    tr = T.get_transport()
+    simultaneity is the shot. One failure must never kill the rest."""
 
     async def one(lid: str):
         try:
+            if transport.is_stub():
+                # A scripted listing agent answers. The transcript still goes
+                # through the real extract_outcome() and the real re-rank -
+                # only the dial tone is fake.
+                transcript = await asyncio.wait_for(
+                    transport.stub_call(lid, extra_questions), timeout=CALL_TIMEOUT
+                )
+                if transcript is None:
+                    await mark_no_answer(session_id, lid, extra_questions)
+                    return None
+                oc = await extract_outcome(transcript, extra_questions)
+                import main
+                await main.agent_outcome({
+                    "session_id": session_id, "listing_id": lid,
+                    **oc.model_dump(mode="json"),
+                })
+                return lid
             return await asyncio.wait_for(
-                tr.place_call(session_id, lid, extra_questions), timeout=CALL_TIMEOUT
+                place_call(session_id, lid, extra_questions), timeout=CALL_TIMEOUT
             )
         except Exception as exc:
             await mark_no_answer(session_id, lid, extra_questions)
@@ -102,23 +120,14 @@ async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list
     return await asyncio.gather(*(one(l) for l in listing_ids), return_exceptions=True)
 
 
-async def complete_call(session_id: str, listing_id: str, outcome: CallOutcome) -> None:
-    """Where a transport delivers a finished CallOutcome: write it into state
-    and re-rank. Same completion path bridge.py's hangup safety net already
-    uses for a real call - StubTransport uses it too, so both paths converge
-    on identical state-write + re-rank behaviour."""
-    import main
-    await main.agent_outcome({"session_id": session_id, "listing_id": listing_id,
-                              **outcome.model_dump()})
-
-
 async def mark_no_answer(session_id: str, listing_id: str, extra_questions: list[str]) -> None:
     """Timeout or error -> NO_ANSWER -> draft the email. Never leave it spinning."""
     draft = await draft_email(listing_id, extra_questions)
 
     def write(s):
         for st in s.listings:
-            if st.listing_id == listing_id and st.status is CallStatus.CALLING:
+            if st.listing_id == listing_id and st.status in (
+                    CallStatus.CALLING, CallStatus.PENDING):
                 st.status = CallStatus.NO_ANSWER
                 st.email_draft = draft
 
@@ -145,25 +154,31 @@ async def extract_outcome(transcript: str, extra_questions: list[str]) -> CallOu
 
     asked = "; ".join(extra_questions) or "none"
     try:
-        r = await client.responses.parse(
-            model="gpt-4.1-mini",
-            input=[
+        import chat as _chat
+        _, model = _chat._client()
+        r = await client.chat.completions.parse(
+            model=model,
+            messages=[
                 {"role": "system", "content":
                  "Extract ONLY what the listing agent actually said in this phone call. "
-                 "If they did not mention something, leave it null or empty - never guess. "
+                 "If they did not mention something, leave it null - never guess. "
+                 "If they said the unit is gone or already leased, set available=false. "
+                 "real_rent = the listed rent PLUS every mandatory add-on they named. "
+                 "addons = each extra cost as a short phrase, e.g. 'parking $180'. "
                  f"The caller also asked us to find out: {asked}. "
                  "Set `source` to who said it and when, e.g. 'Mark, 1:42pm'."},
                 {"role": "user", "content": transcript},
             ],
-            text_format=CallOutcome,
+            response_format=CallOutcome,
         )
     except Exception as exc:
-        # A bad/expired/rate-limited key must degrade the same way a missing
-        # one does, never crash the call that's landing this outcome.
-        log.warning("extract_outcome: OpenAI call failed (%s) - falling back to raw transcript", exc)
+        # A bad/expired/rate-limited key, or a provider that can't satisfy this
+        # request shape, must degrade the same way a missing key does - never
+        # crash the call that's landing this outcome.
+        log.warning("extract_outcome: model call failed (%s) - falling back to raw transcript", exc)
         return _degraded()
 
-    oc = r.output_parsed or CallOutcome()
+    oc = r.choices[0].message.parsed or CallOutcome()
     oc.raw_transcript = transcript
     if not oc.source:
         oc.source = datetime.now().strftime("agent, %-I:%M%p").lower()

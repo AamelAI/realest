@@ -1,140 +1,121 @@
-"""The CallTransport seam.
+"""How a call to a listing agent actually gets made.
 
-TODO.md's `1.6` asks for a transport interface so D2's call -> outcome -> re-rank
-logic never has to wait on a real phone: `RealTransport` wraps the existing,
-already-working Twilio path in `calls.place_call()` unchanged; `StubTransport`
-fabricates a deterministic transcript so the whole pipeline (extraction,
-state write, re-rank) is testable with no Twilio/OpenAI credentials at all.
+Two implementations behind one interface, chosen by TRANSPORT in .env:
 
-Neither transport touches bridge.py's audio/barge-in logic. A real call's
-outcome still arrives the way it already does - the model calling
-`record_outcome` live, or bridge.py's hangup safety net - `RealTransport`
-here only fires the call. `StubTransport` is the one that manufactures a
-transcript and pushes it through the same completion path.
+    TRANSPORT=stub    a scripted listing agent answers. No telephony.
+    TRANSPORT=voice   Twilio dials for real (server/calls.place_call).
+
+The stub is not a mock of the product - it is a mock of the *phone network*.
+The transcript it returns goes through the real extract_outcome(), so
+structured-output extraction, the CallOutcome schema and the re-rank are all
+genuinely exercised. Only the dial tone is fake.
+
+That is what lets three lanes build and rehearse the whole demo by typing while
+voice lands in parallel. When D4 is ready, flip one env var.
+
+Scripts live in SCRIPTS below and mirror docs/DEMO.md. A listing with no script
+gets a plausible generic answer, so the stub never blocks an unplanned session.
 """
 from __future__ import annotations
 
 import asyncio
 import os
-from abc import ABC, abstractmethod
+import random
 
+import listings as L
 
-class CallTransport(ABC):
-    @abstractmethod
-    async def place_call(self, session_id: str, listing_id: str, extra_questions: list[str]) -> None:
-        """Fire the call. Must not return the outcome - it must eventually be
-        delivered via calls.complete_call(), on whatever timeline this
-        transport actually has (a real call: minutes, out of band, via the
-        bridge; the stub: a short deterministic delay, right here)."""
+# Roughly how long a real 45-second call takes to come back. Staggered so the
+# three cards don't all resolve on the same tick - that stagger is the thing
+# that reads as "these are separate phone calls" on camera.
+DELAY_RANGE = (6.0, 11.0)
 
-
-class RealTransport(CallTransport):
-    """Thin wrapper - no new behaviour. `calls.place_call()` is the existing,
-    already-working Twilio implementation; this only gives it the interface
-    shape `fan_out()` now expects."""
-
-    async def place_call(self, session_id: str, listing_id: str, extra_questions: list[str]) -> None:
-        import calls
-        await calls.place_call(session_id, listing_id, extra_questions)
-        # The outcome is NOT produced here. It arrives later, out of band,
-        # from the live call via bridge.py (record_outcome tool, or the
-        # hangup safety net) - exactly as it does today without this seam.
-
-
-# Canned per-listing transcripts for demo/dev. Keyed by address fragment so it
-# still hits without knowing exact seeded ids. Falls through to a generic one.
-_CANNED: dict[str, str] = {
-    "wellington": (
-        "Agent: Hi, this is Dana.\n"
-        "Us: Hi Dana, I'm an AI assistant calling on behalf of a client about "
-        "700 Wellington St W. Is it still available?\n"
-        "Agent: Yes, still available.\n"
-        "Us: What does parking actually cost on top of the listed rent?\n"
-        "Agent: Parking is an extra $180 a month, and there's a $40 locker fee too.\n"
-        "Us: Got it. What's the pet policy?\n"
-        "Agent: No pets, sorry.\n"
-        "Us: Understood, thanks for your time."
+# id -> what the listing agent says. Straight from docs/DEMO.md.
+# None means nobody picks up.
+SCRIPTS: dict[str, str | None] = {
+    # DEAD - the top pick, leased days ago, listing never pulled down
+    "L013": (
+        "Agent: Hi, Dana speaking.\n"
+        "AI: Hi, I'm an AI assistant calling on behalf of a client about 370 Queens "
+        "Quay West. Is that one still available?\n"
+        "Agent: Oh - no, sorry, that one's gone. We leased it Tuesday. I keep meaning "
+        "to pull the listing down.\n"
+        "AI: Understood, thanks very much for your time.\n"
+        "Agent: No problem."
     ),
-    "strachan": (
-        "Agent: Hello?\n"
-        "Us: Hi, I'm an AI assistant calling about 155 Strachan Ave. Is it still available?\n"
-        "Agent: Oh, that one's actually already leased - went Tuesday.\n"
-        "Us: Ah, thanks for letting me know."
+    # PRICE WRONG - parking is an add-on, which puts it over budget
+    "L054": (
+        "Agent: 57 Spadina, this is Mark.\n"
+        "AI: Hi, I'm an AI assistant calling for a client about the one bedroom at "
+        "57 Spadina. Is it still available, and is parking included in the rent?\n"
+        "Agent: It's available, yes. Parking's separate though - that's a hundred and "
+        "eighty a month on top.\n"
+        "AI: Good to know. Any locker with it?\n"
+        "Agent: Lockers are all spoken for in that building right now.\n"
+        "AI: Thanks Mark, that's really helpful."
     ),
-    "lynn williams": (
-        "Agent: Hi, this is Priya.\n"
-        "Us: Hi Priya, calling on behalf of a client about 80 Lynn Williams St. "
-        "Still available?\n"
-        "Agent: Yes it is.\n"
-        "Us: What does parking cost, and is there a locker included?\n"
-        "Agent: Parking's included, and yes, locker's included too.\n"
-        "Us: Great, and pets?\n"
-        "Agent: Cats only, no dogs.\n"
-        "Us: Could we book a viewing?\n"
-        "Agent: Saturday at 2pm works.\n"
-        "Us: Perfect, thank you."
+    # BOOKED - available, locker included, but cats only and the caller has a dog
+    "L061": (
+        "Agent: Ordnance Street, Priya here.\n"
+        "AI: Hi, I'm an AI assistant calling for a client about the one bedroom at "
+        "25 Ordnance Street. Still available?\n"
+        "Agent: It is, yes.\n"
+        "AI: Is parking extra, and is there a locker?\n"
+        "Agent: Parking's included, and there's a locker with that unit too.\n"
+        "AI: And the pet policy?\n"
+        "Agent: Cats only in this building, I'm afraid. No dogs.\n"
+        "AI: Noted. Could my client view it Saturday afternoon?\n"
+        "Agent: Saturday at two works.\n"
+        "AI: Perfect, let's hold two o'clock Saturday. Thank you."
     ),
+    # NO ANSWER - drafts an email instead
+    "L063": None,
 }
-_DEFAULT_TRANSCRIPT = (
+
+GENERIC = (
     "Agent: Hello?\n"
-    "Us: Hi, I'm an AI assistant calling on behalf of a client about {address}. "
-    "Is it still available?\n"
-    "Agent: Yes, still available, nothing unusual to report.\n"
-    "Us: Thanks for your time."
+    "AI: Hi, I'm an AI assistant calling for a client about the unit at {address}. "
+    "Is it still available, and is parking included?\n"
+    "Agent: It's still up, yes. Parking's included in the rent for that one.\n"
+    "AI: And pets?\n"
+    "Agent: Pets are fine.\n"
+    "AI: Great - could they view it Saturday afternoon?\n"
+    "Agent: Saturday at one, sure.\n"
+    "AI: Thank you."
 )
 
-STUB_DELAY_S = float(os.getenv("STUB_CALL_DELAY", "2"))
+
+def mode() -> str:
+    """`stub` unless someone has explicitly switched to real telephony."""
+    return os.getenv("TRANSPORT", "stub").strip().lower()
 
 
-class StubTransport(CallTransport):
-    """Deterministic fake call for development and demo without a phone.
+def is_stub() -> bool:
+    return mode() != "voice"
 
-    Sleeps a short, configurable delay (default 2s - long enough that three
-    cards visibly flip to CALLING together, short enough to not stall a demo),
-    then runs a canned transcript through the SAME extract_outcome() a real
-    call uses, and delivers it through the same completion path.
+
+async def stub_call(listing_id: str, extra_questions: list[str]) -> str | None:
+    """A scripted listing agent answers. Returns a transcript, or None for no answer.
+
+    The delay is deliberate: cards should sit in CALLING long enough that the
+    reshuffle is a visible event rather than an instant repaint.
     """
+    await asyncio.sleep(random.uniform(*DELAY_RANGE))
 
-    async def place_call(self, session_id: str, listing_id: str, extra_questions: list[str]) -> None:
-        import calls
-        import listings as L
-
-        await asyncio.sleep(STUB_DELAY_S)
-
-        lst = L.by_id(listing_id)
-        address = lst.address if lst else listing_id
-        transcript = _DEFAULT_TRANSCRIPT.format(address=address)
-        for key, canned in _CANNED.items():
-            if lst and key in lst.address.lower():
-                transcript = canned
-                break
-
-        outcome = await calls.extract_outcome(transcript, extra_questions)
-        await calls.complete_call(session_id, listing_id, outcome)
-
-
-_transport: CallTransport | None = None
-
-
-def get_transport() -> CallTransport:
-    """Auto: real if Twilio is actually configured, stub otherwise - so D2's
-    loop never blocks on D4/Twilio setup. Override with CALL_TRANSPORT=stub|real."""
-    global _transport
-    if _transport is not None:
-        return _transport
-
-    mode = os.getenv("CALL_TRANSPORT", "").strip().lower()
-    if mode == "stub":
-        _transport = StubTransport()
-    elif mode == "real":
-        _transport = RealTransport()
+    if listing_id in SCRIPTS:
+        script = SCRIPTS[listing_id]
+        if script is None:
+            return None              # nobody picks up -> NO_ANSWER -> email
+        transcript = script
     else:
-        have_twilio = bool(os.getenv("TWILIO_ACCOUNT_SID") and os.getenv("TWILIO_AUTH_TOKEN"))
-        _transport = RealTransport() if have_twilio else StubTransport()
-    return _transport
+        lst = L.by_id(listing_id)
+        transcript = GENERIC.format(address=lst.address if lst else "the unit")
 
-
-def set_transport(t: CallTransport | None) -> None:
-    """Test hook - force a specific transport (or None to re-run auto-detect)."""
-    global _transport
-    _transport = t
+    # If the caller asked us something extra, the agent answers that too - the
+    # whole point is that we bring back what the listing never said.
+    if extra_questions:
+        asks = "; ".join(extra_questions)
+        transcript += (
+            f"\nAI: One more thing my client asked - {asks}?\n"
+            "Agent: Yes, that's included."
+        )
+    return transcript

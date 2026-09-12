@@ -8,6 +8,7 @@ You can build and test ~90% of this with curl, no phone involved. Do that.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 
 from dotenv import load_dotenv
@@ -28,6 +29,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Three call outcomes land within a second of each other. rerank() reads state,
+# computes an order, then writes it - all outside store's lock - so two
+# concurrent re-ranks clobber each other and the last writer wins, silently
+# dropping the other calls' results. Serialise apply+rerank.
+_outcome_lock = asyncio.Lock()
 
 WEB_URL = os.getenv("WEB_URL", "http://localhost:3000").rstrip("/")
 SHORTLIST_SIZE = 4
@@ -119,14 +126,50 @@ async def agent_preferences(payload: dict):
     spoken = (f"{n} fit. I've texted you a link - {top} is on top. Have a look while we talk."
               if n else "Nothing matches that yet. Want to widen the budget or the area?")
     await store.mutate(sid, lambda s_: setattr(s_, "agent_says", spoken))
-    return {"speak": spoken, "count": n, "link": f"{WEB_URL}/s/{sid}"}
+    # The model needs the ids to pass back to start_calls. They are never
+    # spoken - `speak` is the only field that reaches the caller's ear - but
+    # without them the model invents labels like "Listing 2" and nothing matches.
+    shortlist = [
+        {"listing_id": st.listing_id,
+         "address": (L.by_id(st.listing_id).address if L.by_id(st.listing_id) else "")}
+        for st in s.listings
+    ]
+    return {"speak": spoken, "count": n, "link": f"{WEB_URL}/s/{sid}",
+            "shortlist": shortlist}
+
+
+def _resolve_ids(raw: list, session_id: str) -> list[str]:
+    """Map whatever the model sent back to real listing ids.
+
+    It is given the ids in the record_preferences result, but models still
+    sometimes echo an address or a label. Silently calling nothing is the worst
+    outcome, so match on id first, then address, then fall back to the whole
+    shortlist if nothing resolves.
+    """
+    s = store.get(session_id)
+    known = [st.listing_id for st in s.listings] if s else []
+    if not raw:
+        return known
+    out: list[str] = []
+    for item in raw:
+        token = str(item).strip()
+        if token in known:
+            out.append(token)
+            continue
+        low = token.lower()
+        for lid in known:
+            lst = L.by_id(lid)
+            if lst and (low in lst.address.lower() or lst.address.lower() in low):
+                out.append(lid)
+                break
+    return out or known
 
 
 @app.post("/agent/start-calls")
 async def agent_start_calls(payload: dict):
     """Verify these listings. Fan out. Cards flip to CALLING before any await."""
     sid = payload.get("session_id", "demo")
-    ids = payload.get("listing_ids") or []
+    ids = _resolve_ids(payload.get("listing_ids") or [], sid)
     extra = payload.get("extra_questions") or []
 
     if not calls.within_business_hours():
@@ -163,8 +206,9 @@ async def agent_outcome(payload: dict):
             if st.listing_id == lid:
                 L.apply_outcome(st, oc)
 
-    await store.mutate(sid, write)
-    s = await rerank(sid)
+    async with _outcome_lock:
+        await store.mutate(sid, write)
+        s = await rerank(sid)
     return {"speak": "Got it, thanks.", "agent_says": s.agent_says}
 
 
@@ -205,3 +249,10 @@ async def agent_email(payload: dict):
 import bridge  # noqa: E402
 
 bridge.attach(app)
+
+# The text layer. Same prompt, same tools, same dispatch() - only the transport
+# differs, so the whole product can be exercised by typing while voice lands in
+# parallel. GET /chat is a harness page; POST /chat is one turn.
+import chat  # noqa: E402
+
+chat.attach(app)

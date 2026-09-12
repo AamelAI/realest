@@ -1,7 +1,12 @@
 """The three fixtures from .claude/skills/ranking/.
 
 If fixtures 2 and 3 produce the demo's reshuffle, the demo works.
-    uv run python tests/test_rank.py
+    uv run pytest tests/test_rank.py -q
+    uv run python tests/test_rank.py       # also runs standalone
+
+Wrapped in a pytest function (mechanical only, no logic changed) - a bare
+module-level `raise SystemExit` aborts pytest's collection for the whole
+suite, not just this file.
 """
 from __future__ import annotations
 
@@ -31,60 +36,64 @@ DEMO = [
 PREFS = Preferences(beds=2, areas=["King West", "Liberty Village"], max_rent=3400,
                     parking=True, pets="dog", priority_order=["parking", "price"])
 
-ok = True
-
-
-def check(label: str, cond: bool, detail: str = "") -> None:
-    global ok
-    print(("  \033[32mPASS\033[0m " if cond else "  \033[31mFAIL\033[0m ") + label + (f"  {detail}" if detail else ""))
-    ok = ok and cond
-
 
 def order(states) -> list[str]:
     return [s.listing_id for s in states]
 
 
-print("\nfixture 1 - no outcomes, pure preference fit")
-r1 = rank(DEMO, PREFS, {})
-print("  order:", order(r1))
-check("all four present", len(r1) == 4)
-check("ranks are 1..4", [s.rank for s in r1] == [1, 2, 3, 4])
-check("no-parking Bathurst is last", order(r1)[-1] == "L003", "parking was priority #1")
-check("nothing marked dead", all(s.status is CallStatus.PENDING for s in r1))
+def test_ranking_fixtures() -> None:
+    ok = True
 
-print("\nfixture 2 - top pick returns available:False, it sinks")
-top = order(r1)[0]
-r2 = rank(DEMO, PREFS, {top: CallOutcome(available=False, source="Mark, 1:42pm")}, previous=r1)
-print("  order:", order(r2))
-check(f"{top} sank to the bottom", order(r2)[-1] == top)
-check("it reads as dead", r2[-1].status is CallStatus.DEAD)
-check("everything else shifted up", order(r2)[0] != top)
+    def check(label: str, cond: bool, detail: str = "") -> None:
+        nonlocal ok
+        print(("  \033[32mPASS\033[0m " if cond else "  \033[31mFAIL\033[0m ") + label + (f"  {detail}" if detail else ""))
+        ok = ok and cond
 
-print("\nfixture 3 - add-ons push a listing over budget, it demotes below a cheaper verified unit")
-outs = {
-    "L001": CallOutcome(available=False, source="Mark, 1:42pm"),
-    "L002": CallOutcome(available=True, addons=["parking $180", "locker $40"], source="Dana, 1:41pm"),
-    "L004": CallOutcome(available=True, viewing_slot="Saturday 2:00pm",
-                        pets_allowed="cats only", source="Priya, 1:43pm"),
-}
-r3 = rank(DEMO, PREFS, outs, previous=r2)
-print("  order:", order(r3))
-pos = {s.listing_id: i for i, s in enumerate(r3)}
-check("Lynn Williams (verified, in budget) is #1", order(r3)[0] == "L004")
-check("Wellington demoted below it", pos["L002"] > pos["L004"], "$3,470 real vs $3,400 cap")
-check("Strachan still bottom", order(r3)[-1] == "L001")
-check("cats-only listing was NOT removed", "L004" in pos, "rule 5: annotate, never remove")
+    print("\nfixture 1 - no outcomes, pure preference fit")
+    r1 = rank(DEMO, PREFS, {})
+    print("  order:", order(r1))
+    check("all four present", len(r1) == 4)
+    check("ranks are 1..4", [s.rank for s in r1] == [1, 2, 3, 4])
+    check("no-parking Bathurst is last", order(r1)[-1] == "L003", "parking was priority #1")
+    check("nothing marked dead", all(s.status is CallStatus.PENDING for s in r1))
 
-print("\nfixture 4 - ties are stable across identical re-ranks")
-a, b = rank(DEMO, PREFS, outs, previous=r3), rank(DEMO, PREFS, outs, previous=r3)
-check("two identical ranks agree", order(a) == order(b), " ".join(order(a)))
+    print("\nfixture 2 - top pick returns available:False, it sinks")
+    top = order(r1)[0]
+    r2 = rank(DEMO, PREFS, {top: CallOutcome(available=False, source="Mark, 1:42pm")}, previous=r1)
+    print("  order:", order(r2))
+    check(f"{top} sank to the bottom", order(r2)[-1] == top)
+    check("it reads as dead", r2[-1].status is CallStatus.DEAD)
+    check("everything else shifted up", order(r2)[0] != top)
 
-print("\nfixture 5 - reprioritising transit over parking flips the order, removes nothing")
-p2 = PREFS.model_copy(update={"priority_order": ["transit", "parking", "price"]})
-r5 = rank(DEMO, p2, {})
-print("  order:", order(r5))
-check("all four still present", len(r5) == 4, "a weight change is not a filter change")
-check("order actually changed", order(r5) != order(r1), f"{order(r1)} -> {order(r5)}")
+    print("\nfixture 3 - add-ons push a listing over budget, it demotes below a cheaper verified unit")
+    outs = {
+        "L001": CallOutcome(available=False, source="Mark, 1:42pm"),
+        "L002": CallOutcome(available=True, addons=["parking $180", "locker $40"], source="Dana, 1:41pm"),
+        "L004": CallOutcome(available=True, viewing_slot="Saturday 2:00pm",
+                            pets_allowed="cats only", source="Priya, 1:43pm"),
+    }
+    r3 = rank(DEMO, PREFS, outs, previous=r2)
+    print("  order:", order(r3))
+    pos = {s.listing_id: i for i, s in enumerate(r3)}
+    check("Lynn Williams (verified, in budget) is #1", order(r3)[0] == "L004")
+    check("Wellington demoted below it", pos["L002"] > pos["L004"], "$3,470 real vs $3,400 cap")
+    check("Strachan still bottom", order(r3)[-1] == "L001")
+    check("cats-only listing was NOT removed", "L004" in pos, "rule 5: annotate, never remove")
 
-print("\n\033[32mall fixtures pass\033[0m\n" if ok else "\n\033[31mFIXTURES FAILING\033[0m\n")
-raise SystemExit(0 if ok else 1)
+    print("\nfixture 4 - ties are stable across identical re-ranks")
+    a, b = rank(DEMO, PREFS, outs, previous=r3), rank(DEMO, PREFS, outs, previous=r3)
+    check("two identical ranks agree", order(a) == order(b), " ".join(order(a)))
+
+    print("\nfixture 5 - reprioritising transit over parking flips the order, removes nothing")
+    p2 = PREFS.model_copy(update={"priority_order": ["transit", "parking", "price"]})
+    r5 = rank(DEMO, p2, {})
+    print("  order:", order(r5))
+    check("all four still present", len(r5) == 4, "a weight change is not a filter change")
+    check("order actually changed", order(r5) != order(r1), f"{order(r1)} -> {order(r5)}")
+
+    assert ok, "one or more ranking fixtures failed - see output above"
+
+
+if __name__ == "__main__":
+    test_ranking_fixtures()
+    print("\n\033[32mall fixtures pass\033[0m\n")
