@@ -34,7 +34,9 @@ If nobody picks up, or it's the wrong hour to be calling, it drafts an email ins
 |---|---|
 | **[CLAUDE.md](CLAUDE.md)** | The brief. Read before writing any code — scope, hard rules, conventions |
 | **[PLAYBOOK.md](PLAYBOOK.md)** | Strategy: rubric decode, winner analysis, demo script, build ladder, scorecard |
+| **[BACKLOG.md](BACKLOG.md)** | Every task, assigned to a lane, in build order |
 | **[PREFLIGHT.md](PREFLIGHT.md)** | Setup checklist and the stack decision, with rationale |
+| **[docs/VOICE_SPIKE.md](docs/VOICE_SPIKE.md)** | The 20-minute runbook to get a phone ringing |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | System design, the state contract, request flow, failure handling |
 | **[docs/SPONSORS.md](docs/SPONSORS.md)** | Every sponsor tool, what it's for, and which we're using |
 
