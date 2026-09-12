@@ -1,80 +1,79 @@
 {
-  "_note": "OpenAI Realtime function tools. Sent in session.update when a call's websocket opens (see scripts/spike_bridge.py). The model emits response.function_call_arguments.done; the bridge calls the matching Python function IN-PROCESS and replies with conversation.item.create / function_call_output. No HTTP webhooks, no dashboard, no URLs to rewrite.",
-  "_renter_agent": ["record_preferences", "start_calls", "book_viewing", "send_sms"],
-  "_listing_agent": ["record_outcome"],
-  "tools": [
-    {
-      "type": "function",
-      "name": "record_preferences",
-      "description": "Call this as soon as the caller has described what they're looking for - bedrooms, neighbourhoods, budget, parking, pets. Call it AGAIN any time they change or reprioritize what matters. Do not wait until the end of the conversation.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "beds": { "type": "integer", "description": "Bedrooms wanted." },
-          "baths": { "type": "integer", "description": "Bathrooms wanted." },
-          "areas": { "type": "array", "items": { "type": "string" }, "description": "Neighbourhoods, e.g. King West, Liberty Village." },
-          "max_rent": { "type": "integer", "description": "Maximum monthly rent in CAD." },
-          "parking": { "type": "boolean", "description": "True if they need parking." },
-          "pets": { "type": "string", "description": "dog, cat, or none." },
-          "priority_order": { "type": "array", "items": { "type": "string" }, "description": "What matters most FIRST, e.g. [transit, price, parking]. Update whenever they reprioritize - this drives the re-rank." }
+    "_note": "OpenAI Realtime function tools. Sent in session.update when a call's websocket opens (see scripts/spike_bridge.py). The model emits response.function_call_arguments.done; the bridge calls the matching Python function IN-PROCESS and replies with conversation.item.create / function_call_output. No HTTP webhooks, no dashboard, no URLs to rewrite.",
+    "_renter_agent": ["record_preferences", "start_calls", "book_viewing", "send_sms"],
+    "_listing_agent": ["record_outcome"],
+    "tools": [{
+            "type": "function",
+            "name": "record_preferences",
+            "description": "Call this as soon as the caller has described what they're looking for - bedrooms, neighbourhoods, budget, parking, pets. Call it AGAIN any time they change or reprioritize what matters. Do not wait until the end of the conversation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "beds": { "type": "integer", "description": "Bedrooms wanted." },
+                    "baths": { "type": "integer", "description": "Bathrooms wanted." },
+                    "areas": { "type": "array", "items": { "type": "string" }, "description": "Neighbourhoods, e.g. King West, Liberty Village." },
+                    "max_rent": { "type": "integer", "description": "Maximum monthly rent in CAD." },
+                    "parking": { "type": "boolean", "description": "True if they need parking." },
+                    "pets": { "type": "string", "description": "dog, cat, or none." },
+                    "priority_order": { "type": "array", "items": { "type": "string" }, "description": "What matters most FIRST, e.g. [transit, price, parking]. Update whenever they reprioritize - this drives the re-rank." }
+                },
+                "required": []
+            }
         },
-        "required": []
-      }
-    },
-    {
-      "type": "function",
-      "name": "start_calls",
-      "description": "Call this when the caller has confirmed which listings they want verified, or when they give a number to call as the listing agent (e.g. 4375550100). BEFORE calling it, always ask whether there is anything else they want asked on the call.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "listing_ids": { "type": "array", "items": { "type": "string" }, "description": "Listings to verify, e.g. [L061, L003], or the listing-agent number 4375550100." },
-          "extra_questions": { "type": "array", "items": { "type": "string" }, "description": "Anything extra the caller asked us to find out." }
+        {
+            "type": "function",
+            "name": "start_calls",
+            "description": "Call this when the caller has confirmed which listings they want verified, or when they give a number to call as the listing agent (e.g. +111111111111). BEFORE calling it, always ask whether there is anything else they want asked on the call.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "listing_ids": { "type": "array", "items": { "type": "string" }, "description": "Listings to verify, e.g. [L061, L003], or the listing-agent number +111111111111." },
+                    "extra_questions": { "type": "array", "items": { "type": "string" }, "description": "Anything extra the caller asked us to find out." }
+                },
+                "required": ["listing_ids"]
+            }
         },
-        "required": ["listing_ids"]
-      }
-    },
-    {
-      "type": "function",
-      "name": "send_sms",
-      "description": "Text the caller the shortlist link. Call this immediately at the start of the inbound call, before waiting for preferences, and again if they ask for the link or say they did not get it.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "caller_phone": { "type": "string", "description": "Caller's mobile in E.164, e.g. +14165551234. Omit if already known." }
+        {
+            "type": "function",
+            "name": "send_sms",
+            "description": "Text the caller the shortlist link. Call this immediately at the start of the inbound call, before waiting for preferences, and again if they ask for the link or say they did not get it.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caller_phone": { "type": "string", "description": "Caller's mobile in E.164, e.g. +14165551234. Omit if already known." }
+                },
+                "required": []
+            }
         },
-        "required": []
-      }
-    },
-    {
-      "type": "function",
-      "name": "book_viewing",
-      "description": "Call this when the caller confirms a specific viewing slot on a specific listing.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "listing_id": { "type": "string", "description": "Listing to book." },
-          "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." }
+        {
+            "type": "function",
+            "name": "book_viewing",
+            "description": "Call this when the caller confirms a specific viewing slot on a specific listing.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "listing_id": { "type": "string", "description": "Listing to book." },
+                    "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." }
+                },
+                "required": ["listing_id", "slot"]
+            }
         },
-        "required": ["listing_id", "slot"]
-      }
-    },
-    {
-      "type": "function",
-      "name": "record_outcome",
-      "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess: the entire product rests on these facts having come from a human.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "available": { "type": "boolean", "description": "Is the unit still available?" },
-          "addons": { "type": "array", "items": { "type": "string" }, "description": "Mandatory extra costs, e.g. parking $180, locker $40." },
-          "pets_allowed": { "type": "string", "description": "Exactly what they said about pets." },
-          "viewing_slot": { "type": "string", "description": "Slot offered, if any." },
-          "answers": { "type": "string", "description": "Answers to the caller's extra questions." },
-          "source": { "type": "string", "description": "Who said it and when, e.g. Mark, 1:42pm." }
-        },
-        "required": []
-      }
-    }
-  ]
+        {
+            "type": "function",
+            "name": "record_outcome",
+            "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess: the entire product rests on these facts having come from a human.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "available": { "type": "boolean", "description": "Is the unit still available?" },
+                    "addons": { "type": "array", "items": { "type": "string" }, "description": "Mandatory extra costs, e.g. parking $180, locker $40." },
+                    "pets_allowed": { "type": "string", "description": "Exactly what they said about pets." },
+                    "viewing_slot": { "type": "string", "description": "Slot offered, if any." },
+                    "answers": { "type": "string", "description": "Answers to the caller's extra questions." },
+                    "source": { "type": "string", "description": "Who said it and when, e.g. Mark, 1:42pm." }
+                },
+                "required": []
+            }
+        }
+    ]
 }

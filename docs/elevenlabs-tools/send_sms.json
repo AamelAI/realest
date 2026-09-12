@@ -27,8 +27,8 @@
         {
           "id": "caller_phone",
           "type": "string",
-          "description": "",
-          "dynamic_variable": "caller_phone",
+          "description": "Inbound caller. Filled from system__caller_id. Do not invent it.",
+          "dynamic_variable": "system__caller_id",
           "constant_value": "",
           "value_type": "dynamic_variable",
           "required": false,

@@ -14,13 +14,13 @@ import os
 import secrets
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 import calls
 import listings as L
 import state as store
-from schemas import CallOutcome, CallStatus, Preferences
+from schemas import CallOutcome, CallStatus, ListingState, Preferences
 
 log = logging.getLogger("realest.main")
 
@@ -128,7 +128,8 @@ async def rerank(session_id: str, says: str | None = None, shortlist: bool = Tru
 def _nested_get(payload: dict, *keys: str) -> str:
     """First non-empty string among top-level keys or common ElevenLabs wrappers."""
     wrappers = [payload]
-    for wrap in ("data", "conversation_initiation_client_data", "dynamic_variables"):
+    for wrap in ("data", "conversation_initiation_client_data", "dynamic_variables",
+                 "parameters", "arguments", "tool_parameters"):
         inner = payload.get(wrap)
         if isinstance(inner, dict):
             wrappers.append(inner)
@@ -140,11 +141,54 @@ def _nested_get(payload: dict, *keys: str) -> str:
     return ""
 
 
+def _walk_dicts(obj, depth: int = 0):
+    if depth > 6 or not isinstance(obj, dict):
+        return
+    yield obj
+    for val in obj.values():
+        if isinstance(val, dict):
+            yield from _walk_dicts(val, depth + 1)
+        elif isinstance(val, list):
+            for item in val:
+                if isinstance(item, dict):
+                    yield from _walk_dicts(item, depth + 1)
+
+
+_CALLER_KEYS = (
+    "caller_phone", "caller_id", "system__caller_id", "from_number",
+    "From", "from", "caller", "user_id",
+)
+
+
 def _apply_caller(payload: dict) -> str:
-    phone = _nested_get(payload, "caller_phone", "From", "from_number",
-                        "from", "caller_id", "caller",
-                        "user_id", "system__caller_id")
-    return phone if phone and calls.E164.match(phone) else ""
+    """Inbound caller as E.164. Accepts +1437…, +111111111111, or (437) 555-0100."""
+    if not isinstance(payload, dict):
+        return ""
+    for block in _walk_dicts(payload):
+        for key in _CALLER_KEYS:
+            dest = calls.as_e164(str(block.get(key) or ""))
+            if dest:
+                return dest
+    return ""
+
+
+async def _request_payload(request: Request) -> dict:
+    """Init webhook may be JSON, form, or query — do not drop the caller_id."""
+    payload: dict = {}
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            payload = body
+    except Exception:
+        payload = {}
+    if not payload:
+        payload = {k: v for k, v in request.query_params.multi_items()}
+        try:
+            form = await request.form()
+            payload.update({k: str(v) for k, v in form.multi_items()})
+        except Exception:
+            pass
+    return payload
 
 
 def _session_for_caller(phone: str) -> str:
@@ -172,11 +216,12 @@ def _ensure_session(payload: dict) -> str:
     return sid
 
 
-async def _sms_link_once(sid: str, link: str) -> bool:
+async def _sms_link_once(sid: str, link: str, to: str = "") -> bool:
     """One shortlist text per session. Safe to call from init, prefs, or send_sms."""
     if sid in _linked:
         return True
-    sent = await calls.sms(sid, f"Your shortlist: {link}")
+    dest = calls.as_e164(to) or None
+    sent = await calls.sms(sid, f"Your shortlist: {link}", to=dest)
     if sent:
         _linked.add(sid)
     return sent
@@ -192,7 +237,7 @@ def _as_list(val) -> list[str]:
 
 
 @app.post("/agent/init")
-async def agent_init(payload: dict):
+async def agent_init(request: Request):
     """ElevenLabs calls this the moment an INBOUND call connects.
 
     An inbound call arrives cold - no client data - so {{session_id}} is empty
@@ -203,6 +248,7 @@ async def agent_init(payload: dict):
     It is also the only place we learn the caller's number, which is where the
     shortlist SMS has to go.
     """
+    payload = await _request_payload(request)
     sid = secrets.token_urlsafe(6)
     caller = _apply_caller(payload)
     called = _nested_get(payload, "called_number", "to_number", "agent_number")
@@ -213,11 +259,12 @@ async def agent_init(payload: dict):
 
     await store.mutate(sid, write)
     link = f"{WEB_URL}/s/{sid}"
-    log.info("inbound session %s · caller=%s · called=%s", sid, caller or "?", called or "?")
-    # Background: this webhook must return before the greeting. A Twilio hop
-    # here would stall pickup; sms() never raises.
+    log.info("inbound session %s · caller=%s · called=%s · keys=%s",
+             sid, caller or "?", called or "?", sorted(payload.keys()))
+    # Background: this webhook must return before the greeting. Pass `to`
+    # explicitly so the send does not depend on a later store read.
     if caller:
-        asyncio.create_task(_sms_link_once(sid, link))
+        asyncio.create_task(_sms_link_once(sid, link, to=caller))
 
     # ElevenLabs merges these into the agent's dynamic variables for the call.
     return {
@@ -256,10 +303,9 @@ async def agent_preferences(payload: dict):
               if n else "Nothing matches that yet. Want to widen the budget or the area?")
     await store.mutate(sid, lambda s_: setattr(s_, "agent_says", spoken))
 
-    # Backup if pickup SMS has not gone out yet (no caller_id on init, or
-    # the initiation webhook is off). Once per session.
-    if n:
-        await _sms_link_once(sid, f"{WEB_URL}/s/{sid}")
+    # Backup if pickup SMS has not gone out yet. Send even with an empty
+    # shortlist — the page fills in as they talk.
+    await _sms_link_once(sid, f"{WEB_URL}/s/{sid}", to=phone)
     # The model needs the ids to pass back to start_calls. They are never
     # spoken - `speak` is the only field that reaches the caller's ear - but
     # without them the model invents labels like "Listing 2" and nothing matches.
@@ -289,7 +335,7 @@ def _resolve_ids(raw: list, session_id: str) -> list[str]:
         token = str(item).strip()
         dest = calls.as_e164(token)
         if dest:
-            # "call 4375550100" means: ring that number as the listing agent
+            # "call +111111111111" means: ring that number as the listing agent
             # for this shortlist, not a listing id.
             calls.set_session_dest(session_id, dest)
             continue
@@ -303,6 +349,30 @@ def _resolve_ids(raw: list, session_id: str) -> list[str]:
                 out.append(lid)
                 break
     return out or known
+
+
+async def _ensure_call_targets(sid: str, ids: list[str]) -> list[str]:
+    """Always have at least one listing to dial. Empty ids is why 'call them' no-ops."""
+    s = store.get(sid)
+    if not ids:
+        ids = [st.listing_id for st in (s.listings if s else [])[:1]]
+    if not ids:
+        pool = L.load()
+        ids = [pool[0].listing_id] if pool else []
+    have = {st.listing_id for st in (s.listings if s else [])}
+
+    def write(st):
+        n = len(st.listings)
+        for lid in ids:
+            if lid in have or not L.by_id(lid):
+                continue
+            n += 1
+            st.listings.append(ListingState(listing_id=lid, rank=n))
+            have.add(lid)
+
+    if any(lid not in have and L.by_id(lid) for lid in ids):
+        await store.mutate(sid, write)
+    return [lid for lid in ids if L.by_id(lid)]
 
 
 def _resolve_listing_id(payload: dict, session_id: str) -> str:
@@ -323,13 +393,24 @@ def _resolve_listing_id(payload: dict, session_id: str) -> str:
 
 @app.post("/agent/start-calls")
 async def agent_start_calls(payload: dict):
-    """Verify these listings. Fan out. Cards flip to CALLING before any await."""
+    """Verify the top listing. Demo: one ring, always DEMO_AGENT_PHONE."""
     sid = _ensure_session(payload)
-    ids = calls.unique_destinations(
+    ids = await _ensure_call_targets(
         sid, _resolve_ids(_as_list(payload.get("listing_ids")), sid)
     )
+    if len(ids) > 1:
+        log.info("start-calls[%s]: demo — only first %s, skip %s", sid, ids[0], ids[1:])
+        ids = ids[:1]
+    demo = calls.as_e164(os.getenv("DEMO_AGENT_PHONE", "")) or "+1+111111111111"
+    calls.set_session_dest(sid, demo)
+    ids = calls.unique_destinations(sid, ids)
     extra = _as_list(payload.get("extra_questions"))
     phone = _apply_caller(payload)
+
+    if not ids:
+        spoken = "I don't have a listing to call yet. Tell me what you're after first."
+        await store.mutate(sid, lambda s: setattr(s, "agent_says", spoken))
+        return {"speak": spoken, "session_id": sid, "called": 0}
 
     if not calls.within_business_hours():
         spoken = calls.OUT_OF_HOURS
@@ -347,11 +428,16 @@ async def agent_start_calls(payload: dict):
                 st.status = CallStatus.CALLING
 
     n = len(ids)
-    spoken = f"Calling {'all ' + str(n) if n > 1 else 'them'} now - watch your screen."
+    dest = calls.destination(sid, L.by_id(ids[0]))
+    spoken = f"Calling the listing agent now - watch your screen."
     await store.mutate(sid, write)
     await store.mutate(sid, lambda s: setattr(s, "agent_says", spoken))
+    log.info("start-calls[%s]: dial %s as listing-agent → %s", sid, ids, dest)
     await calls.fan_out(sid, ids, extra)
-    return {"speak": spoken, "session_id": sid, "called": n}
+    s = store.get(sid)
+    if s and s.agent_says:
+        spoken = s.agent_says
+    return {"speak": spoken, "session_id": sid, "called": n, "to": dest}
 
 
 @app.post("/agent/outcome")
@@ -422,7 +508,7 @@ async def agent_sms(payload: dict):
             s.caller_phone = phone
 
     await store.mutate(sid, write)
-    sent = await _sms_link_once(sid, link)
+    sent = await _sms_link_once(sid, link, to=phone)
     spoken = ("I've texted you the link. Have a look while we talk."
               if sent else
               "I couldn't text that number. What's a good mobile, with country code?")

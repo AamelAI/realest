@@ -12,7 +12,7 @@ export async function POST(req: Request) {
       headers: { "content-type": "application/json" },
       body: await req.text(),
       cache: "no-store",
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(120000),
     });
     return new Response(await r.text(), {
       status: r.status,

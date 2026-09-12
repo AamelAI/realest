@@ -1,68 +1,67 @@
 {
-  "type": "webhook",
-  "name": "start_calls",
-  "description": "Call this only after the caller confirmed which listings to verify, or when they give a number to call as the listing agent (e.g. 4375550100). BEFORE calling it, ask if there is anything else they want asked on those calls. After it returns, read the speak field aloud. listing_ids are real ids from the last record_preferences shortlist (like L061), or the demo listing-agent number.",
-  "api_schema": {
-    "url": "https://zipping-scarf-actress.ngrok-free.dev/agent/start-calls",
-    "method": "POST",
-    "path_params_schema": [],
-    "query_params_schema": [],
-    "request_body_schema": {
-      "id": "body",
-      "type": "object",
-      "description": "Which shortlist listings to call, plus any extra questions for the listing agent.",
-      "required": true,
-      "value_type": "llm_prompt",
-      "properties": [
-        {
-          "id": "session_id",
-          "type": "string",
-          "description": "",
-          "dynamic_variable": "session_id",
-          "constant_value": "",
-          "value_type": "dynamic_variable",
-          "required": true,
-          "enum": null
+    "type": "webhook",
+    "name": "start_calls",
+    "description": "Call this when the caller wants you to phone a listing agent, verify a listing, or call +111111111111. Omit listing_ids to call the current shortlist. Wait for it to return — the listing call may take a minute — then read the speak field aloud.",
+    "api_schema": {
+        "url": "https://zipping-scarf-actress.ngrok-free.dev/agent/start-calls",
+        "method": "POST",
+        "path_params_schema": [],
+        "query_params_schema": [],
+        "request_body_schema": {
+            "id": "body",
+            "type": "object",
+            "description": "Which shortlist listings to call, plus any extra questions for the listing agent.",
+            "required": true,
+            "value_type": "llm_prompt",
+            "properties": [{
+                    "id": "session_id",
+                    "type": "string",
+                    "description": "",
+                    "dynamic_variable": "session_id",
+                    "constant_value": "",
+                    "value_type": "dynamic_variable",
+                    "required": true,
+                    "enum": null
+                },
+                {
+                    "id": "listing_ids",
+                    "type": "string",
+                    "description": "Real listing ids from the shortlist, comma-separated, e.g. L061, L003. Or the listing-agent number to dial, e.g. +111111111111. Omit to call the current shortlist.",
+                    "dynamic_variable": "",
+                    "constant_value": "",
+                    "value_type": "llm_prompt",
+                    "required": false,
+                    "enum": null
+                },
+                {
+                    "id": "extra_questions",
+                    "type": "string",
+                    "description": "Extra things the caller wants asked, comma-separated short phrases.",
+                    "dynamic_variable": "",
+                    "constant_value": "",
+                    "value_type": "llm_prompt",
+                    "required": false,
+                    "enum": null
+                }
+            ]
         },
-        {
-          "id": "listing_ids",
-          "type": "string",
-          "description": "Real listing ids from the shortlist, comma-separated, e.g. L061, L003. Or the listing-agent number to dial, e.g. 4375550100.",
-          "dynamic_variable": "",
-          "constant_value": "",
-          "value_type": "llm_prompt",
-          "required": true,
-          "enum": null
-        },
-        {
-          "id": "extra_questions",
-          "type": "string",
-          "description": "Extra things the caller wants asked, comma-separated short phrases.",
-          "dynamic_variable": "",
-          "constant_value": "",
-          "value_type": "llm_prompt",
-          "required": false,
-          "enum": null
-        }
-      ]
+        "request_headers": [],
+        "content_type": "application/json",
+        "auth_connection": null,
+        "response_filter": null
     },
-    "request_headers": [],
-    "content_type": "application/json",
-    "auth_connection": null,
-    "response_filter": null
-  },
-  "response_timeout_secs": 60,
-  "follow_redirects": false,
-  "follow_redirects_allowed_domains": [],
-  "dynamic_variables": {
-    "dynamic_variable_placeholders": {}
-  },
-  "assignments": [],
-  "interruption_mode": "allow",
-  "pre_tool_speech": "auto",
-  "tool_call_sound": null,
-  "tool_call_sound_behavior": "auto",
-  "execution_mode": "immediate",
-  "tool_error_handling_mode": "auto",
-  "response_mocks": []
+    "response_timeout_secs": 120,
+    "follow_redirects": false,
+    "follow_redirects_allowed_domains": [],
+    "dynamic_variables": {
+        "dynamic_variable_placeholders": {}
+    },
+    "assignments": [],
+    "interruption_mode": "allow",
+    "pre_tool_speech": "auto",
+    "tool_call_sound": null,
+    "tool_call_sound_behavior": "auto",
+    "execution_mode": "immediate",
+    "tool_error_handling_mode": "auto",
+    "response_mocks": []
 }
