@@ -86,6 +86,7 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
                 "session_id": session_id,
                 "listing_id": listing_id,
                 "address": lst.address,
+                "listing_address": lst.address,
                 "listed_rent": str(lst.rent),
                 "agent_name": lst.agent_name or "",
                 "extra_questions": ", ".join(extra_questions),
@@ -228,6 +229,9 @@ async def watch_listing_call(
                     **oc.model_dump(mode="json"),
                 })
             else:
+                why = (last.get("metadata") or {}).get("termination_reason") or status
+                log.warning("watch[%s/%s]: empty transcript (%s) — %s",
+                            session_id, listing_id, status, why)
                 await mark_no_answer(session_id, listing_id, extra_questions)
             return
         await asyncio.sleep(POLL_EVERY_S)
