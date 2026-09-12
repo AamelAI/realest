@@ -153,12 +153,24 @@ def _apply_caller(payload: dict) -> str:
     return phone if phone and calls.E164.match(phone) else ""
 
 
+def _as_list(val) -> list[str]:
+    """ElevenLabs dashboard body fields are strings; accept a list or CSV."""
+    if val is None or val == "":
+        return []
+    if isinstance(val, list):
+        return [str(x).strip() for x in val if str(x).strip()]
+    return [p.strip() for p in str(val).split(",") if p.strip()]
+
+
 @app.post("/agent/preferences")
 async def agent_preferences(payload: dict):
     """Caller described what they want, or reprioritized. Re-rank, speak one line."""
     sid = _ensure_session(payload)
     first = store.get(sid) is None
     fields = {k: v for k, v in payload.items() if k in Preferences.model_fields and v is not None}
+    for key in ("areas", "priority_order", "extra_questions"):
+        if key in fields:
+            fields[key] = _as_list(fields[key])
     phone = _apply_caller(payload)
 
     def write(s):
@@ -234,8 +246,8 @@ def _resolve_listing_id(payload: dict, session_id: str) -> str:
 async def agent_start_calls(payload: dict):
     """Verify these listings. Fan out. Cards flip to CALLING before any await."""
     sid = _ensure_session(payload)
-    ids = _resolve_ids(payload.get("listing_ids") or [], sid)
-    extra = payload.get("extra_questions") or []
+    ids = _resolve_ids(_as_list(payload.get("listing_ids")), sid)
+    extra = _as_list(payload.get("extra_questions"))
     phone = _apply_caller(payload)
 
     if not calls.within_business_hours():
@@ -275,8 +287,13 @@ async def agent_outcome(payload: dict):
     if existing and existing.outcome is not None:
         return {"speak": "Got it.", "session_id": sid, "agent_says": s.agent_says if s else ""}
 
-    oc = CallOutcome(**{k: v for k, v in payload.items()
-                        if k in CallOutcome.model_fields and v is not None})
+    raw = {k: v for k, v in payload.items()
+           if k in CallOutcome.model_fields and v is not None}
+    if "addons" in raw:
+        raw["addons"] = _as_list(raw["addons"])
+    if isinstance(raw.get("answers"), str):
+        raw["answers"] = {"notes": raw["answers"]}
+    oc = CallOutcome(**raw)
 
     def write(st_):
         for st in st_.listings:

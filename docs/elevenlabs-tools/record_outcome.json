@@ -1,0 +1,115 @@
+{
+  "type": "webhook",
+  "name": "record_outcome",
+  "description": "Call this at the end of the call with everything the listing agent actually said. Only fill a field if they said it. Never guess. After it returns, you can hang up.",
+  "api_schema": {
+    "url": "https://zipping-scarf-actress.ngrok-free.dev/agent/outcome",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [],
+    "request_body_schema": {
+      "id": "body",
+      "type": "object",
+      "description": "Facts from the human listing agent. Omit any field they did not mention.",
+      "required": true,
+      "value_type": "llm_prompt",
+      "properties": [
+        {
+          "id": "session_id",
+          "type": "string",
+          "description": "Pass {{session_id}}. Never invent it.",
+          "dynamic_variable": "session_id",
+          "constant_value": "",
+          "value_type": "dynamic_variable",
+          "required": true,
+          "enum": null
+        },
+        {
+          "id": "listing_id",
+          "type": "string",
+          "description": "Pass {{listing_id}}. Never invent it.",
+          "dynamic_variable": "listing_id",
+          "constant_value": "",
+          "value_type": "dynamic_variable",
+          "required": true,
+          "enum": null
+        },
+        {
+          "id": "available",
+          "type": "boolean",
+          "description": "True if they said the unit is still available. False if gone or leased. Omit if unsaid.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "value_type": "llm_prompt",
+          "required": false,
+          "enum": null
+        },
+        {
+          "id": "addons",
+          "type": "string",
+          "description": "Mandatory extra costs they named, comma-separated, e.g. parking $180, locker $40.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "value_type": "llm_prompt",
+          "required": false,
+          "enum": null
+        },
+        {
+          "id": "pets_allowed",
+          "type": "string",
+          "description": "Exactly what they said about pets. Do not paraphrase into a policy.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "value_type": "llm_prompt",
+          "required": false,
+          "enum": null
+        },
+        {
+          "id": "viewing_slot",
+          "type": "string",
+          "description": "Viewing time they offered, if any.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "value_type": "llm_prompt",
+          "required": false,
+          "enum": null
+        },
+        {
+          "id": "answers",
+          "type": "string",
+          "description": "Their answers to extra questions, as short phrases.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "value_type": "llm_prompt",
+          "required": false,
+          "enum": null
+        },
+        {
+          "id": "source",
+          "type": "string",
+          "description": "Who said it and when, e.g. Mark, 1:42pm.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "value_type": "llm_prompt",
+          "required": false,
+          "enum": null
+        }
+      ]
+    },
+    "request_headers": [],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "response_timeout_secs": 20,
+  "dynamic_variables": {
+    "dynamic_variable_placeholders": {}
+  },
+  "assignments": [],
+  "disable_interruptions": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "tool_error_handling_mode": "auto",
+  "response_mocks": []
+}
