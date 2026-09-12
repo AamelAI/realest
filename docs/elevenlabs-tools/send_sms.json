@@ -1,16 +1,16 @@
 {
   "type": "webhook",
-  "name": "start_calls",
-  "description": "Call this only after the caller confirmed which listings to verify. BEFORE calling it, ask if there is anything else they want asked on those calls. After it returns, read the speak field aloud. listing_ids must be real ids from the last record_preferences shortlist (like L061), never Listing 2 or an address.",
+  "name": "send_sms",
+  "description": "Text the caller the shortlist link. Call this after record_preferences has returned, or when they ask for the link. After it returns, read the speak field aloud. If sent is false, ask for a mobile number with country code and call this again.",
   "api_schema": {
-    "url": "https://zipping-scarf-actress.ngrok-free.dev/agent/start-calls",
+    "url": "https://zipping-scarf-actress.ngrok-free.dev/agent/sms",
     "method": "POST",
     "path_params_schema": [],
     "query_params_schema": [],
     "request_body_schema": {
       "id": "body",
       "type": "object",
-      "description": "Which shortlist listings to call, plus any extra questions for the listing agent.",
+      "description": "Where to send the shortlist SMS.",
       "required": true,
       "value_type": "llm_prompt",
       "properties": [
@@ -25,19 +25,9 @@
           "enum": null
         },
         {
-          "id": "listing_ids",
+          "id": "caller_phone",
           "type": "string",
-          "description": "Real listing ids from the shortlist, comma-separated, e.g. L061, L003. Not addresses.",
-          "dynamic_variable": "",
-          "constant_value": "",
-          "value_type": "llm_prompt",
-          "required": true,
-          "enum": null
-        },
-        {
-          "id": "extra_questions",
-          "type": "string",
-          "description": "Extra things the caller wants asked, comma-separated short phrases.",
+          "description": "Caller's mobile in E.164, e.g. +14165551234. Use the number they are calling from if you know it. Omit if unknown.",
           "dynamic_variable": "",
           "constant_value": "",
           "value_type": "llm_prompt",
@@ -51,13 +41,19 @@
     "auth_connection": null,
     "response_filter": null
   },
-  "response_timeout_secs": 60,
+  "response_timeout_secs": 20,
   "follow_redirects": false,
   "follow_redirects_allowed_domains": [],
   "dynamic_variables": {
     "dynamic_variable_placeholders": {}
   },
-  "assignments": [],
+  "assignments": [
+    {
+      "source": "response",
+      "dynamic_variable": "session_id",
+      "value_path": "session_id"
+    }
+  ],
   "interruption_mode": "allow",
   "pre_tool_speech": "auto",
   "tool_call_sound": null,

@@ -149,7 +149,8 @@ def _ensure_session(payload: dict) -> str:
 
 
 def _apply_caller(payload: dict) -> str:
-    phone = _nested_get(payload, "caller_phone", "From", "from_number", "user_id")
+    phone = _nested_get(payload, "caller_phone", "From", "from_number",
+                        "user_id", "system__caller_id")
     return phone if phone and calls.E164.match(phone) else ""
 
 
@@ -327,6 +328,26 @@ async def agent_book(payload: dict):
     await store.mutate(sid, write)
     await calls.sms(sid, f"Confirmed: {where}, {slot}. {WEB_URL}/s/{sid}")
     return {"speak": spoken, "session_id": sid}
+
+
+@app.post("/agent/sms")
+async def agent_sms(payload: dict):
+    """Text the shortlist link. The model only calls this; Twilio sends it."""
+    sid = _ensure_session(payload)
+    phone = _apply_caller(payload)
+    link = f"{WEB_URL}/s/{sid}"
+
+    def write(s):
+        if phone and not s.caller_phone:
+            s.caller_phone = phone
+
+    await store.mutate(sid, write)
+    sent = await calls.sms(sid, f"Your shortlist: {link}")
+    spoken = ("I've texted you the link. Have a look while we talk."
+              if sent else
+              "I couldn't text that number. What's a good mobile, with country code?")
+    await store.mutate(sid, lambda s_: setattr(s_, "agent_says", spoken))
+    return {"speak": spoken, "session_id": sid, "sent": sent, "link": link}
 
 
 @app.post("/agent/email")
