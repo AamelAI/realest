@@ -27,12 +27,12 @@ export default async function SessionPage({ params }: { params: Promise<{ sid: s
   // in the middle of a demo reads as broken software.
   if (!state) {
     return (
-      <main className="flex min-h-dvh items-center justify-center px-6">
-        <div className="max-w-sm text-center">
-          <h1 className="font-display text-xl font-extrabold tracking-[-0.02em]">
+      <main className="flex min-h-dvh items-center justify-center px-5">
+        <div className="w-full max-w-sm rounded-card border border-line bg-surface p-6">
+          <h1 className="text-[22px] font-semibold leading-[1.2] tracking-[-0.015em]">
             This shortlist has expired
           </h1>
-          <p className="mt-2 text-sm text-muted">
+          <p className="mt-2 text-[15px] leading-[1.5] text-ink-2">
             Shortlists live as long as the call. Ring us back and we&rsquo;ll build a new one.
           </p>
         </div>
