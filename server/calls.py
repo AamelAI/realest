@@ -6,24 +6,36 @@ DO NOT build an audio pipeline. bridge.py owns audio entirely.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import re
+import time
 from datetime import datetime
 
 from openai import AsyncOpenAI
 
 import listings as L
 import state as store
+import transport as T
 from schemas import CallOutcome, CallStatus
+
+log = logging.getLogger("realest.calls")
 
 BUSINESS_HOURS = (9, 19)  # local; outside this the agent declines and offers email
 CALL_TIMEOUT = 90         # never leave a card spinning
+SMS_LINK_DELAY_S = 5      # SITE COBRA's trick: link lands while the caller is still talking
+SMS_DEDUPE_WINDOW_S = 30  # same (to, body) fired twice within this window -> only sent once
 
 OUT_OF_HOURS = (
     "It's outside business hours - I'd rather not cold-call them now. "
     "I've drafted emails instead and I'll text you when they reply."
 )
 
-_ended: dict[str, bool] = {}
+E164 = re.compile(r"^\+[1-9]\d{7,14}$")
+
+_ended: dict[str, bool] = {}           # session_id -> the call has already ended
+_link_sms_started: set[str] = set()    # session_id -> the 5s link-SMS timer already ran once
+_recent_sms: dict[tuple[str, str], float] = {}  # (to, body) -> last-sent monotonic time
 
 
 def _twilio():
@@ -72,18 +84,32 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
 
 async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list[str]) -> list:
     """Three at once. Cards are already CALLING before we get here - that
-    simultaneity is the shot. One failure must never kill the rest."""
+    simultaneity is the shot. One failure must never kill the rest.
+
+    Goes through CallTransport (real Twilio, or the deterministic stub) so
+    this loop never has to wait on a phone to be testable."""
+    tr = T.get_transport()
 
     async def one(lid: str):
         try:
             return await asyncio.wait_for(
-                place_call(session_id, lid, extra_questions), timeout=CALL_TIMEOUT
+                tr.place_call(session_id, lid, extra_questions), timeout=CALL_TIMEOUT
             )
         except Exception as exc:
             await mark_no_answer(session_id, lid, extra_questions)
             return exc
 
     return await asyncio.gather(*(one(l) for l in listing_ids), return_exceptions=True)
+
+
+async def complete_call(session_id: str, listing_id: str, outcome: CallOutcome) -> None:
+    """Where a transport delivers a finished CallOutcome: write it into state
+    and re-rank. Same completion path bridge.py's hangup safety net already
+    uses for a real call - StubTransport uses it too, so both paths converge
+    on identical state-write + re-rank behaviour."""
+    import main
+    await main.agent_outcome({"session_id": session_id, "listing_id": listing_id,
+                              **outcome.model_dump()})
 
 
 async def mark_no_answer(session_id: str, listing_id: str, extra_questions: list[str]) -> None:
@@ -107,7 +133,11 @@ async def extract_outcome(transcript: str, extra_questions: list[str]) -> CallOu
     """
     client = _openai()
     if client is None or not transcript.strip():
-        return CallOutcome(raw_transcript=transcript)
+        # Degraded path (no key, or nothing to parse): still never leave
+        # `source` empty - 2.1's own acceptance criterion is "source always
+        # set", not just "set when the model happens to be available".
+        return CallOutcome(raw_transcript=transcript,
+                           source=datetime.now().strftime("agent, %-I:%M%p").lower())
 
     asked = "; ".join(extra_questions) or "none"
     r = await client.responses.parse(
@@ -167,29 +197,77 @@ async def send_email(session_id: str, listing_id: str) -> bool:
     return r.status_code < 300
 
 
+def _sms_dedupe_seen(to: str, body: str) -> bool:
+    """True if this exact (to, body) pair already went out within the window -
+    guards against a retry, a double-scheduled task, or a re-entrant handler
+    sending the same text twice."""
+    now = time.monotonic()
+    key = (to, body)
+    last = _recent_sms.get(key)
+    if last is not None and now - last < SMS_DEDUPE_WINDOW_S:
+        return True
+    _recent_sms[key] = now
+    return False
+
+
 async def sms(session_id: str, body: str, to: str | None = None) -> bool:
-    """One line. Long messages split into segments and arrive out of order."""
-    client = _twilio()
-    to = to or store.get(session_id).caller_phone if store.get(session_id) else None
-    if client is None or not to:
+    """One line. Long messages split into segments and arrive out of order.
+
+    Validates the destination, de-dupes an identical send within a short
+    window, retries once on a transient Twilio error, and never raises - a
+    failed text must never take down the call flow around it."""
+    session = store.get(session_id)
+    to = to or (session.caller_phone if session else None)
+    if not to or not E164.match(to):
+        log.warning("sms[%s]: no valid E.164 destination (%r) - not sending", session_id, to)
         return False
-    await asyncio.to_thread(client.messages.create, body=body,
-                            from_=os.getenv("TWILIO_PHONE_NUMBER"), to=to)
-    return True
+
+    if _sms_dedupe_seen(to, body):
+        log.info("sms[%s]: duplicate suppressed, already sent to %s within %ss",
+                 session_id, to, SMS_DEDUPE_WINDOW_S)
+        return True  # already delivered - not a failure
+
+    client = _twilio()
+    if client is None:
+        log.warning("sms[%s]: Twilio not configured - not sending", session_id)
+        return False
+
+    for attempt in (1, 2):
+        try:
+            await asyncio.to_thread(client.messages.create, body=body,
+                                    from_=os.getenv("TWILIO_PHONE_NUMBER"), to=to)
+            log.info("sms[%s]: sent to %s (%d chars, attempt %d)", session_id, to, len(body), attempt)
+            return True
+        except Exception as exc:
+            log.warning("sms[%s]: attempt %d failed: %s", session_id, attempt, exc)
+            if attempt == 1:
+                await asyncio.sleep(1)
+    return False
 
 
-async def sms_if_call_alive(session_id: str, call_sid: str, link: str) -> None:
+async def sms_if_call_alive(session_id: str, link: str) -> None:
     """SITE COBRA sent the link 5s into the call, then cancelled if it had ended.
     The link lands while the caller is still talking - that's what makes the
-    second screen feel like part of the conversation."""
-    await asyncio.sleep(5)
-    if _ended.get(call_sid):
+    second screen feel like part of the conversation.
+
+    Keyed by session_id, not a Twilio CallSid: session_id is already threaded
+    through every part of the inbound call, so wiring this up from wherever
+    the call actually starts needs no extra plumbing. Safe to call more than
+    once for the same session - only the first schedules the timer."""
+    if session_id in _link_sms_started:
+        return
+    _link_sms_started.add(session_id)
+
+    await asyncio.sleep(SMS_LINK_DELAY_S)
+    if _ended.get(session_id):
+        log.info("sms_if_call_alive[%s]: call ended before %ss - not sending link",
+                 session_id, SMS_LINK_DELAY_S)
         return
     await sms(session_id, f"Your shortlist: {link}")
 
 
-def mark_call_ended(call_sid: str) -> None:
-    _ended[call_sid] = True
+def mark_call_ended(session_id: str) -> None:
+    _ended[session_id] = True
 
 
 async def email_all(session_id: str, listing_ids: list[str], extra_questions: list[str]) -> None:
