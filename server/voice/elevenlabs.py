@@ -30,6 +30,12 @@ class ElevenLabsProvider:
         self.phone_number_id = (src.get("ELEVENLABS_PHONE_NUMBER_ID") or "").strip()
         self.renter_agent_id = (src.get("ELEVENLABS_RENTER_AGENT_ID") or "").strip()
         self.listing_agent_id = (src.get("ELEVENLABS_LISTING_AGENT_ID") or "").strip()
+        # Venue Wi-Fi often MITMs TLS. Demo only — never leave this on in a real deploy.
+        flag = (src.get("ELEVENLABS_INSECURE_SKIP_VERIFY") or "").strip().lower()
+        self.verify = flag not in {"1", "true", "yes"}
+
+    def _client(self, timeout: float) -> httpx.AsyncClient:
+        return httpx.AsyncClient(timeout=timeout, verify=self.verify)
 
     def configured(self) -> bool:
         return bool(
@@ -74,7 +80,7 @@ class ElevenLabsProvider:
             raise ElevenLabsError(f"{action} failed HTTP {r.status_code}: {body}")
 
     async def health(self) -> dict:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with self._client(15) as client:
             r = await client.get(USER, headers=self._headers())
         self._raise_http(r, "health")
         data = r.json()
@@ -102,7 +108,7 @@ class ElevenLabsProvider:
                 "dynamic_variables": dynamic_variables,
             }
 
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with self._client(20) as client:
             r = await client.post(OUTBOUND, headers=self._headers(), json=payload)
         self._raise_http(r, "outbound call")
         data = r.json()
@@ -115,7 +121,7 @@ class ElevenLabsProvider:
         )
 
     async def get_conversation(self, conversation_id: str) -> dict:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with self._client(15) as client:
             r = await client.get(
                 f"{CONVERSATION}/{conversation_id}",
                 headers=self._headers(),

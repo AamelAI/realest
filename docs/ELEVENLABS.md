@@ -105,6 +105,18 @@ Inbound renter calls still work if the Twilio number is assigned to the Renter a
 
 ---
 
+## 6 · Phase 2 — a result lands
+
+The listing call is not the product. The card flip is.
+
+**Webhook (the shot).** The Listing agent’s `record_outcome` POSTs `/agent/outcome` with `session_id` + `listing_id` as dynamic variables. That writes `CallOutcome`, re-ranks, and the page reshuffles. Do not let the model invent those ids.
+
+**Poll (the safety net).** After `place_call`, the server polls `GET /v1/convai/conversations/{id}` every 5s for up to 90s. If the webhook already wrote an outcome, the poll stops. If the call ends with a transcript and no webhook, `extract_outcome()` fills the card. If nothing arrives, the card goes `no_answer` and an email is drafted. Cards must not stay `calling`.
+
+**Inbound session.** If the renter tool omits `session_id`, the server uses ElevenLabs `conversation_id`, or mints a short token. The JSON always echoes `session_id` so the next tool can pass it through. First `/agent/preferences` for a new session starts the 5s shortlist SMS (`sms_if_call_alive`). Empty `caller_phone` means the SMS is skipped, not an error.
+
+---
+
 ## Checklist
 
 | Env | Where it comes from |
