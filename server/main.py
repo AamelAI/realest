@@ -401,7 +401,7 @@ async def agent_start_calls(payload: dict):
     if len(ids) > 1:
         log.info("start-calls[%s]: demo — only first %s, skip %s", sid, ids[0], ids[1:])
         ids = ids[:1]
-    demo = calls.as_e164(os.getenv("DEMO_AGENT_PHONE", "")) or "+1+111111111111"
+    demo = calls.as_e164(os.getenv("DEMO_AGENT_PHONE", "")) or "+14375550100"
     calls.set_session_dest(sid, demo)
     ids = calls.unique_destinations(sid, ids)
     extra = _as_list(payload.get("extra_questions"))
