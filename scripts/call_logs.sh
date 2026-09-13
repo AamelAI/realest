@@ -134,8 +134,23 @@ def row_text(i: int, c: dict) -> str:
     )
 
 
+# The bash wrapper feeds this file on stdin (heredoc), so stdin is never a
+# TTY. Keys and raw mode always go through /dev/tty.
+_TTY: int | None = None
+
+
+def _tty() -> int:
+    global _TTY
+    if _TTY is None:
+        try:
+            _TTY = os.open("/dev/tty", os.O_RDWR)
+        except OSError as e:
+            raise SystemExit("Need a real terminal — run `make calls` in iTerm/Terminal.") from e
+    return _TTY
+
+
 def _getch() -> str:
-    return os.read(sys.stdin.fileno(), 1).decode("utf-8", "replace")
+    return os.read(_tty(), 1).decode("utf-8", "replace")
 
 
 def _read_keys() -> str:
@@ -175,7 +190,7 @@ def pick(rows: list[dict], idx: int = 0) -> tuple[str, int]:
 
     idx = max(0, min(idx, len(rows) - 1))
     header_lines = 4  # title, hint, columns, rule
-    fd = sys.stdin.fileno()
+    fd = _tty()
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
@@ -241,7 +256,7 @@ def wait_back() -> str:
     import tty
 
     print(f"{BOLD}  Enter{RST} back to the list   {DIM}r refresh   q quit{RST}")
-    fd = sys.stdin.fileno()
+    fd = _tty()
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
@@ -355,9 +370,7 @@ def main() -> None:
             raise SystemExit(1) from e
         return
 
-    if not (sys.stdin.isatty() and sys.stdout.isatty()):
-        print("Run this in a real terminal (make calls) so the list stays live.", file=sys.stderr)
-        raise SystemExit(1)
+    _tty()  # fail now if there is no controlling terminal
 
     rows: list[dict] = []
     idx = 0
