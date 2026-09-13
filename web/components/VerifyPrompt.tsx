@@ -91,7 +91,7 @@ export function VerifyPrompt({
         style={{ background: "var(--color-accent)" }}
       >
         {sending
-          ? "Dialling…"
+          ? "Starting calls…"
           : count === 0
             ? "Pick a listing to call"
             : `Call ${count} agent${count === 1 ? "" : "s"} now`}

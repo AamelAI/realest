@@ -12,13 +12,17 @@ export function Header({
   status,
   count,
   live,
+  pulse,
 }: {
   criteria: Criterion[];
   /** keys heard since this page opened — tinted, so the new one is findable */
   fresh: Set<string>;
   status: string;
   count: number;
+  /** the connection is up and a session exists — show the dot */
   live: boolean;
+  /** animate it. False while calls are live, so only one heartbeat is on screen */
+  pulse: boolean;
 }) {
   return (
     <header
@@ -32,7 +36,7 @@ export function Header({
           {live && (
             <span
               aria-hidden
-              className="r-pulse ml-1 inline-block h-[6px] w-[6px] shrink-0 rounded-full"
+              className={`${pulse ? "r-pulse" : ""} ml-1 inline-block h-[6px] w-[6px] shrink-0 rounded-full`}
               style={{ background: "var(--color-real)" }}
             />
           )}
