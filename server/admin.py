@@ -5,11 +5,10 @@ via ElevenLabs. Never stores API keys.
 """
 from __future__ import annotations
 
-import os
 import time
 from collections import deque
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 
 import calls
 import listings as L
@@ -52,23 +51,6 @@ def record(
 
 def events_for(session_id: str) -> list[dict]:
     return [e for e in _events if e["session_id"] == session_id]
-
-
-def require_admin(request: Request) -> None:
-    expected = (os.getenv("ADMIN_TOKEN") or "").strip()
-    got = (
-        (request.headers.get("x-admin-token") or "")
-        or (request.query_params.get("token") or "")
-    ).strip()
-    prod = (os.getenv("ENV") or os.getenv("VERCEL_ENV") or "").lower() in {
-        "production", "prod",
-    }
-    if not expected:
-        if prod:
-            raise HTTPException(status_code=401, detail="ADMIN_TOKEN is not set")
-        return
-    if got != expected:
-        raise HTTPException(status_code=401, detail="unauthorized")
 
 
 def _renter_cid(session_id: str) -> str:
