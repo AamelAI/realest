@@ -238,7 +238,12 @@ def within_business_hours(now: datetime | None = None) -> bool:
     return BUSINESS_HOURS[0] <= h < BUSINESS_HOURS[1]
 
 
-async def place_call(session_id: str, listing_id: str, extra_questions: list[str]) -> str:
+async def place_call(
+    session_id: str,
+    listing_id: str,
+    extra_questions: list[str],
+    availability: str = "",
+) -> str:
     """Place one outbound listing-agent call. Returns a provider call id.
 
     VOICE_PROVIDER=elevenlabs → one POST to ConvAI (dynamic vars carry session
@@ -264,6 +269,7 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
                 "listed_rent": str(lst.rent),
                 "agent_name": lst.agent_name or "",
                 "extra_questions": ", ".join(extra_questions),
+                "availability": (availability or "").strip(),
             },
         )
         cid = handle.call_sid or handle.conversation_id or ""
@@ -284,6 +290,8 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
     q = f"session={session_id}&listing={listing_id}"
     if extra_questions:
         q += "&extra=" + "|".join(extra_questions).replace(" ", "%20")
+    if availability:
+        q += "&avail=" + str(availability).replace(" ", "%20")
 
     call = await asyncio.to_thread(
         client.calls.create,
@@ -294,7 +302,12 @@ async def place_call(session_id: str, listing_id: str, extra_questions: list[str
     return call.sid
 
 
-async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list[str]) -> list:
+async def fan_out(
+    session_id: str,
+    listing_ids: list[str],
+    extra_questions: list[str],
+    availability: str = "",
+) -> list:
     """Three at once. Cards are already CALLING before we get here - that
     simultaneity is the shot. One failure must never kill the rest."""
 
@@ -326,7 +339,7 @@ async def fan_out(session_id: str, listing_ids: list[str], extra_questions: list
             # unchanged. Either way, this call must stay fast so the card
             # flips to CALLING and doesn't spin.
             return await asyncio.wait_for(
-                place_call(session_id, lid, extra_questions), timeout=CALL_TIMEOUT
+                place_call(session_id, lid, extra_questions, availability), timeout=CALL_TIMEOUT
             )
         except Exception as exc:
             await mark_no_answer(session_id, lid, extra_questions)

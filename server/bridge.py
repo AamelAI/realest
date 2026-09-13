@@ -41,20 +41,32 @@ RENTER_PROMPT = (
     "Call record_preferences the moment they describe what they want, and AGAIN every "
     "time they change or reprioritise anything - do not wait for the end. "
     "Once they have a shortlist, or they ask you to call a listing agent, "
-    "ALWAYS ask 'anything else you want me to ask?' then call start_calls. Wait for it "
-    "to return and read the speak field - do not pretend you called. "
+    "ALWAYS ask when they are free for viewings, then 'anything else you want me to ask?', "
+    "then call start_calls with availability as one short string of those times. "
+    "The moment you call start_calls, say exactly: "
+    "'Wait until I gather all the information from the real estate agents.' "
+    "Then stay silent. Do not chat, fill time, guess results, or pretend you called. "
+    "start_calls can take a minute. If they talk while you wait, ask them to hold. "
+    "When start_calls returns, read the speak field aloud. "
     "Be brief and natural. Never read JSON or listing ids aloud."
 )
 
 
-def listing_prompt(address: str, rent: int, extra: list[str]) -> str:
+def listing_prompt(address: str, rent: int, extra: list[str], availability: str = "") -> str:
     asks = " Also ask: " + "; ".join(extra) if extra else ""
+    when = (availability or "").strip()
+    slot = (
+        f"The renter is free {when}. Confirm those times with the landlord or listing "
+        "agent and lock a viewing that fits. If none of those work, get the next open slot."
+        if when else
+        "Then ask for a viewing slot."
+    )
     return (
         "You are an AI assistant calling a listing agent on behalf of a client. "
         "Identify yourself as an AI in your FIRST sentence, always. "
         f"You are asking about {address}, listed at ${rent:,} a month. "
         "Ask whether the unit is still available, what parking actually costs on top of "
-        f"the listed rent, and the pet policy.{asks} Then ask for a viewing slot. "
+        f"the listed rent, and the pet policy.{asks} {slot} "
         "Call record_outcome before you hang up with exactly what they told you and "
         "nothing they didn't. Keep it under 60 seconds and be polite."
     )
@@ -119,10 +131,11 @@ def attach(app: FastAPI) -> None:
         session_id = q.get("session", "demo")
         listing_id = q.get("listing", "")
         extra = [e for e in q.get("extra", "").split("|") if e]
+        availability = (q.get("avail") or "").replace("%20", " ")
 
         if role == "listing":
             lst = L.by_id(listing_id)
-            prompt = listing_prompt(lst.address, lst.rent, extra) if lst else RENTER_PROMPT
+            prompt = listing_prompt(lst.address, lst.rent, extra, availability) if lst else RENTER_PROMPT
             tools = LISTING_TOOLS
         else:
             prompt, tools = RENTER_PROMPT, RENTER_TOOLS

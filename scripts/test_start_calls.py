@@ -56,6 +56,8 @@ def build_payload(args: argparse.Namespace) -> dict:
         payload["listing_ids"] = args.listing_ids
     if args.extra_questions:
         payload["extra_questions"] = args.extra_questions
+    if args.availability:
+        payload["availability"] = args.availability
     if args.caller:
         payload["caller_phone"] = args.caller
     return payload
@@ -67,6 +69,7 @@ def main() -> int:
     ap.add_argument("--session-id", default="", help="Reuse a session. Minted if omitted.")
     ap.add_argument("--listing-ids", default="", help="CSV, e.g. L100 or L100,L086")
     ap.add_argument("--extra-questions", default="", help="CSV of extra asks for the listing agent")
+    ap.add_argument("--availability", default="", help="Renter viewing times, one short phrase")
     ap.add_argument("--caller", default="", help="Renter E.164, if you want SMS / session reuse")
     ap.add_argument("--to", default=demo,
                     help="CSV of listing-agent numbers (overrides DEMO_AGENT_PHONE). "
