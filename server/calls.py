@@ -276,11 +276,25 @@ async def place_call(
         log.info("place_call[%s]: elevenlabs listing-agent %s → %s conv=%s sid=%s",
                  session_id, listing_id, to,
                  handle.conversation_id, handle.call_sid)
+        try:
+            import admin as monitor
+            monitor.record(session_id, "listing", "place_call", "started",
+                           summary=listing_id, listing_id=listing_id,
+                           conversation_id=handle.conversation_id or "")
+        except Exception:
+            pass
         if handle.conversation_id:
             _conversations[(session_id, listing_id)] = handle.conversation_id
             await watch_listing_call(
                 session_id, listing_id, handle.conversation_id, extra_questions,
             )
+            try:
+                import admin as monitor
+                monitor.record(session_id, "listing", "place_call", "done",
+                               summary=listing_id, listing_id=listing_id,
+                               conversation_id=handle.conversation_id)
+            except Exception:
+                pass
         return cid
 
     client, public = _twilio(), os.getenv("PUBLIC_URL", "").rstrip("/")
@@ -351,6 +365,73 @@ async def fan_out(
 def _listing_card(session_id: str, listing_id: str):
     s = store.get(session_id)
     return next((st for st in (s.listings if s else []) if st.listing_id == listing_id), None)
+
+
+def tools_of(data: dict) -> list[tuple[str, str, dict]]:
+    """Pair ElevenLabs tool_calls with their tool_results. Shared with admin."""
+    from collections import defaultdict, deque
+
+    turns = data.get("transcript") or data.get("transcripts") or []
+    if not isinstance(turns, list):
+        return []
+    by_id: dict = {}
+    by_name: dict = defaultdict(deque)
+    for t in turns:
+        if not isinstance(t, dict):
+            continue
+        for r in t.get("tool_results") or []:
+            if not isinstance(r, dict):
+                continue
+            if r.get("tool_call_id"):
+                by_id[r["tool_call_id"]] = r
+            else:
+                by_name[r.get("tool_name")].append(r)
+    out: list[tuple[str, str, dict]] = []
+    for t in turns:
+        if not isinstance(t, dict):
+            continue
+        for call in t.get("tool_calls") or []:
+            if not isinstance(call, dict):
+                continue
+            name = call.get("tool_name") or "?"
+            cid = call.get("tool_call_id")
+            if cid and cid in by_id:
+                res = by_id.pop(cid)
+            elif by_name[name]:
+                res = by_name[name].popleft()
+            else:
+                res = {}
+            params = call.get("params_as_json") or call.get("params") or "{}"
+            if not isinstance(params, str):
+                params = json.dumps(params)
+            out.append((str(name), params, res))
+    return out
+
+
+def transcript_turns(data: dict) -> list[dict]:
+    """Structured turns for the admin log pane. Empty messages dropped."""
+    raw = data.get("transcript") or data.get("transcripts") or []
+    if isinstance(raw, str):
+        text = raw.strip()
+        return [{"role": "unknown", "text": text}] if text else []
+    out: list[dict] = []
+    for t in raw:
+        if not isinstance(t, dict):
+            continue
+        role = str(t.get("role") or t.get("speaker") or "unknown").strip().lower()
+        msg = t.get("message") or t.get("text") or t.get("content") or ""
+        if isinstance(msg, list):
+            bits = []
+            for part in msg:
+                if isinstance(part, dict):
+                    bits.append(str(part.get("text") or part.get("message") or ""))
+                else:
+                    bits.append(str(part))
+            msg = " ".join(bits)
+        msg = str(msg).strip()
+        if msg:
+            out.append({"role": role, "text": msg})
+    return out
 
 
 def flatten_transcript(data: dict) -> str:

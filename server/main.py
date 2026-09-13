@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+import admin as monitor
 import calls
 import listings as L
 import state as store
@@ -76,6 +77,24 @@ def _cards(session) -> list[dict]:
         card.update(st.model_dump(mode="json"))
         out.append(card)
     return out
+
+
+@app.get("/admin/live")
+async def admin_live(request: Request):
+    monitor.require_admin(request)
+    return await monitor.live_payload()
+
+
+@app.get("/admin/calls")
+async def admin_calls(request: Request, limit: int = 20):
+    monitor.require_admin(request)
+    return await monitor.history_payload(max(1, min(limit, 50)))
+
+
+@app.get("/admin/calls/{conversation_id}")
+async def admin_call_detail(conversation_id: str, request: Request):
+    monitor.require_admin(request)
+    return await monitor.detail_payload(conversation_id)
 
 
 @app.get("/api/state")
@@ -285,6 +304,8 @@ async def agent_init(request: Request):
     # explicitly so the send does not depend on a later store read.
     if caller:
         asyncio.create_task(_sms_link_once(sid, link, to=caller))
+    monitor.record(sid, "renter", "init", "ok",
+                   conversation_id=calls.renter_conversation(sid))
 
     # ElevenLabs merges these into the agent's dynamic variables for the call.
     return {
@@ -335,6 +356,9 @@ async def agent_preferences(payload: dict):
          "address": (L.by_id(st.listing_id).address if L.by_id(st.listing_id) else "")}
         for st in s.listings
     ]
+    monitor.record(sid, "renter", "preferences", "ok",
+                   summary=f"{n} listings",
+                   conversation_id=calls.renter_conversation(sid))
     return {"speak": spoken, "session_id": sid, "count": n,
             "link": f"{WEB_URL}/s/{sid}", "shortlist": shortlist}
 
@@ -455,7 +479,13 @@ async def agent_start_calls(payload: dict):
     await store.mutate(sid, write)
     await store.mutate(sid, lambda s: setattr(s, "agent_says", spoken))
     log.info("start-calls[%s]: dial %s → %s", sid, ids, dests)
+    monitor.record(sid, "renter", "start_calls", "started",
+                   summary=",".join(ids),
+                   conversation_id=calls.renter_conversation(sid))
     await calls.fan_out(sid, ids, extra, availability)
+    monitor.record(sid, "renter", "start_calls", "done",
+                   summary=f"called {n}",
+                   conversation_id=calls.renter_conversation(sid))
     s = store.get(sid)
     if s and s.agent_says:
         spoken = s.agent_says
@@ -493,6 +523,8 @@ async def agent_outcome(payload: dict):
         await store.mutate(sid, write)
         s = await rerank(sid)
     asyncio.create_task(calls.notify_renter(sid, lid))
+    monitor.record(sid, "listing", "outcome", "ok",
+                   summary=lid, listing_id=lid)
     return {"speak": "Got it, thanks.", "session_id": sid, "agent_says": s.agent_says}
 
 
@@ -535,6 +567,9 @@ async def agent_book(payload: dict):
         when = f", {slot}" if slot else ""
         landlord = await calls.sms_landlord(
             sid, lid, f"The renter is not proceeding with {where}{when}.")
+        monitor.record(sid, "renter", "book", "ok",
+                       summary=f"reject {lid}", listing_id=lid,
+                       conversation_id=calls.renter_conversation(sid))
         return {"speak": spoken, "session_id": sid, "decision": "reject",
                 "landlord_sms": landlord}
 
@@ -552,6 +587,9 @@ async def agent_book(payload: dict):
     await calls.sms(sid, f"Confirmed: {where}, {slot}. {WEB_URL}/s/{sid}")
     landlord = await calls.sms_landlord(
         sid, lid, f"Confirmed viewing: {where}, {slot}. The renter is coming.")
+    monitor.record(sid, "renter", "book", "ok",
+                   summary=f"confirm {lid}", listing_id=lid,
+                   conversation_id=calls.renter_conversation(sid))
     return {"speak": spoken, "session_id": sid, "decision": "confirm",
             "landlord_sms": landlord}
 
@@ -574,6 +612,8 @@ async def agent_sms(payload: dict):
               if sent else
               "I couldn't text that number. What's a good mobile, with country code?")
     await store.mutate(sid, lambda s_: setattr(s_, "agent_says", spoken))
+    monitor.record(sid, "renter", "sms", "ok" if sent else "failed",
+                   conversation_id=calls.renter_conversation(sid))
     return {"speak": spoken, "session_id": sid, "sent": sent, "link": link}
 
 
