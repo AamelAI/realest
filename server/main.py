@@ -236,6 +236,15 @@ def _as_list(val) -> list[str]:
     return [p.strip() for p in str(val).split(",") if p.strip()]
 
 
+def _as_text(val) -> str:
+    """One spoken-length string. Lists collapse to a comma phrase."""
+    if val is None or val == "":
+        return ""
+    if isinstance(val, list):
+        return ", ".join(str(x).strip() for x in val if str(x).strip())
+    return str(val).strip()
+
+
 def _bind_renter_conv(sid: str, payload: dict) -> str:
     """Attach the inbound ElevenLabs conversation to this session if present."""
     cid = _nested_get(payload, "conversation_id", "system__conversation_id")
@@ -413,6 +422,7 @@ async def agent_start_calls(payload: dict):
     )
     ids = calls.assign_demo_targets(sid, ids)
     extra = _as_list(payload.get("extra_questions"))
+    availability = _as_text(payload.get("availability"))
     phone = _apply_caller(payload)
 
     if not ids:
@@ -445,7 +455,7 @@ async def agent_start_calls(payload: dict):
     await store.mutate(sid, write)
     await store.mutate(sid, lambda s: setattr(s, "agent_says", spoken))
     log.info("start-calls[%s]: dial %s → %s", sid, ids, dests)
-    await calls.fan_out(sid, ids, extra)
+    await calls.fan_out(sid, ids, extra, availability)
     s = store.get(sid)
     if s and s.agent_says:
         spoken = s.agent_says

@@ -41,11 +41,15 @@ First message:
 
 > Hi, I'm an AI assistant that finds rentals in Toronto and calls the listing agents for you. What are you after?
 
+Paste `agent/renter-prompt.txt` into the Renter **System prompt**. After `start_calls` it must say “Wait until I gather all the information from the real estate agents,” then stay silent until the tool returns.
+
 Assign the imported Twilio number to this agent so a human dial-in hits it. Copy the agent id → `ELEVENLABS_RENTER_AGENT_ID`.
 
 ### Listing (outbound)
 
-First message **must** identify as an AI, then ask availability, real parking cost, pets, a viewing slot. Under 60 seconds.
+First message **must** identify as an AI, then ask if the unit is open, real parking cost, pets, and a viewing slot. Under 60 seconds.
+
+Paste `agent/listing-prompt.txt` into the Listing **System prompt**. `{{availability}}` is the renter's free times — confirm those with the landlord. Also add `availability` as a string field on the renter `start_calls` tool.
 
 Copy the agent id → `ELEVENLABS_LISTING_AGENT_ID`.
 

@@ -72,6 +72,7 @@ def main() -> int:
                 "listed_rent": "2800",
                 "agent_name": "Dana",
                 "extra_questions": "",
+                "availability": "",
             },
         ))
     except ElevenLabsError as exc:

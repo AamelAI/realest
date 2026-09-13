@@ -23,12 +23,13 @@
         {
             "type": "function",
             "name": "start_calls",
-            "description": "Call this when the caller has confirmed which listings they want verified, or when they give a number to call as the listing agent (e.g. +111111111111). BEFORE calling it, always ask whether there is anything else they want asked on the call.",
+            "description": "Call this when the caller has confirmed which listings they want verified, or when they give a number to call as the listing agent (e.g. +111111111111). BEFORE calling it, always ask whether there is anything else they want asked on the call. The moment you call it, say: 'Wait until I gather all the information from the real estate agents.' Then stay silent until it returns and read the speak field. Do not guess results.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "listing_ids": { "type": "array", "items": { "type": "string" }, "description": "Listings to verify, e.g. [L061, L003], or the listing-agent number +111111111111." },
-                    "extra_questions": { "type": "array", "items": { "type": "string" }, "description": "Anything extra the caller asked us to find out." }
+                    "extra_questions": { "type": "array", "items": { "type": "string" }, "description": "Anything extra the caller asked us to find out." },
+                    "availability": { "type": "string", "description": "When the renter can view, as one short phrase, e.g. weeknights after 6 or Saturday morning. Empty if they did not say." }
                 },
                 "required": ["listing_ids"]
             }

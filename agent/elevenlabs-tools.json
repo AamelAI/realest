@@ -44,7 +44,7 @@
         {
             "type": "webhook",
             "name": "start_calls",
-            "description": "Call this when the caller wants you to phone a listing agent, verify a listing, or call +111111111111. Omit listing_ids to call the current shortlist. Wait for the result and read the speak field aloud.",
+            "description": "Call this when the caller wants you to phone a listing agent, verify a listing, or call +111111111111. BEFORE calling it, ask when they are free for viewings and pass that as availability. Omit listing_ids to call the current shortlist. The moment you call it, say: 'Wait until I gather all the information from the real estate agents.' Then stay silent until it returns — that can take a minute — and read the speak field aloud. Do not guess results or fill the silence.",
             "api_schema": {
                 "url": "{PUBLIC_URL}/agent/start-calls",
                 "method": "POST",
@@ -65,6 +65,10 @@
                             "type": "array",
                             "items": { "type": "string" },
                             "description": "Anything extra the caller asked us to find out."
+                        },
+                        "availability": {
+                            "type": "string",
+                            "description": "When the renter can view, as one short phrase, e.g. weeknights after 6 or Saturday morning. Empty if they did not say."
                         }
                     },
                     "required": ["session_id", "listing_ids"]
