@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Realest — admin</title>
+  <style>
+    :root {
+      --ink: #14161a;
+      --muted: #5c6470;
+      --faint: #8b93a1;
+      --dim: #c7ccd4;
+      --tint: #f5f4ff;
+      --warm: #fafaf8;
+      --surface: #ffffff;
+      --real: #0b6b4f;
+      --warn: #b45309;
+      --dead: #b42318;
+      --hair-row: rgba(20, 22, 26, 0.07);
+      --hair-head: rgba(20, 22, 26, 0.08);
+      --hair-panel: rgba(20, 22, 26, 0.1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--ink);
+      font-family: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+    .tnum { font-variant-numeric: tabular-nums; }
+    header {
+      border-bottom: 1px solid var(--hair-head);
+      padding: 16px 24px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+    .sub { margin-top: 2px; font-size: 12px; color: var(--muted); }
+    nav { display: flex; gap: 24px; font-size: 13px; }
+    nav button {
+      background: none; border: 0; padding: 0; cursor: pointer;
+      color: var(--muted); font: inherit;
+    }
+    nav button.on { color: var(--ink); font-weight: 600; }
+    .grid {
+      display: grid;
+      min-height: calc(100svh - 65px);
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 42%);
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      aside { border-left: 0 !important; border-top: 1px solid var(--hair-panel); }
+    }
+    section { padding: 20px 24px; min-width: 0; }
+    aside {
+      min-width: 0;
+      border-left: 1px solid var(--hair-panel);
+      background: var(--warm);
+      padding: 20px 24px;
+    }
+    h1 { margin: 0; font-size: 15px; font-weight: 600; }
+    .row-head {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+    }
+    .empty { margin-top: 32px; font-size: 13px; color: var(--muted); }
+    .err { margin-top: 12px; font-size: 13px; color: var(--dead); }
+    ol { list-style: none; margin: 16px 0 0; padding: 0; border-top: 1px solid var(--hair-row); }
+    .call {
+      width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--hair-row);
+      background: transparent; padding: 12px 0; cursor: pointer; font: inherit; color: inherit;
+    }
+    .call.sel { background: var(--tint); }
+    .call-top { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+    .call-title { font-size: 14px; font-weight: 500; }
+    .meta { margin-top: 2px; font-size: 11px; color: var(--faint); }
+    .rail { margin-top: 4px; font-size: 11px; display: flex; flex-wrap: wrap; gap: 2px 8px; }
+    .rail .on { color: var(--ink); }
+    .rail .hit { color: var(--muted); }
+    .rail .off { color: var(--dim); }
+    .st-warn { color: var(--warn); }
+    .st-real { color: var(--real); }
+    .st-dead { color: var(--dead); }
+    .st-muted { color: var(--muted); }
+    .linkish {
+      background: none; border: 0; padding: 0; cursor: pointer;
+      font: inherit; color: var(--muted); text-decoration: underline; text-underline-offset: 2px;
+    }
+    aside h2 { margin: 0; font-size: 13px; font-weight: 600; }
+    aside h3 { margin: 24px 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
+    .ev { border-bottom: 1px solid var(--hair-row); padding: 10px 0; }
+    .ev:first-of-type { border-top: 1px solid var(--hair-row); margin-top: 20px; }
+    pre {
+      margin: 4px 0 0; white-space: pre-wrap; font-size: 11px; color: var(--muted);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+    }
+    .turn { border-bottom: 1px solid var(--hair-row); padding: 8px 0; }
+    .turn .role { font-size: 11px; color: var(--faint); }
+    .turn p { margin: 2px 0 0; font-size: 13px; line-height: 1.35; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand">Realest</div>
+      <div class="sub">Admin monitor</div>
+    </div>
+    <nav>
+      <button type="button" id="tab-live" class="on">Live</button>
+      <button type="button" id="tab-hist">History</button>
+    </nav>
+  </header>
+  <div class="grid">
+    <section id="list"></section>
+    <aside id="pane"></aside>
+  </div>
+  <script>
+    const RAIL = ["init", "preferences", "start_calls", "outcome", "book"];
+    let tab = "live";
+    let live = [];
+    let history = [];
+    let histError = "";
+    let selectedLive = "";
+    let selectedHist = "";
+    let detail = null;
+    let loadingHist = false;
+    let prev = "";
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[c]));
+    }
+    function statusClass(status) {
+      const s = String(status || "").toLowerCase();
+      if (["in_flight", "calling", "in-progress", "initiated"].includes(s)) return "st-warn";
+      if (["booked", "verified", "done", "ok"].includes(s)) return "st-real";
+      if (["dead", "failed", "error"].includes(s)) return "st-dead";
+      return "st-muted";
+    }
+    function when(unix) {
+      if (!unix) return "—";
+      const d = new Date(unix * 1000);
+      return [d.getHours(), d.getMinutes(), d.getSeconds()]
+        .map((n) => String(n).padStart(2, "0")).join(":");
+    }
+    function toolRail(tools, current) {
+      const hit = new Set(tools || []);
+      return `<div class="rail mono">${RAIL.map((step, i) => {
+        const cls = current === step ? "on" : hit.has(step) ? "hit" : "off";
+        return `${i ? `<span class="off">—</span>` : ""}<span class="${cls}">${step}</span>`;
+      }).join(" ")}</div>`;
+    }
+
+    async function pollLive() {
+      if (tab !== "live") return;
+      try {
+        const r = await fetch("/admin/live", { cache: "no-store" });
+        if (!r.ok) return;
+        const data = await r.json();
+        const calls = Array.isArray(data.calls) ? data.calls : [];
+        const json = JSON.stringify(calls);
+        if (json === prev) return;
+        prev = json;
+        live = calls;
+        render();
+      } catch (_) { /* keep last */ }
+    }
+
+    async function loadHistory() {
+      loadingHist = true;
+      histError = "";
+      render();
+      try {
+        const r = await fetch("/admin/calls?limit=20", { cache: "no-store" });
+        const data = await r.json();
+        history = Array.isArray(data.calls) ? data.calls : [];
+        if (data.error) histError = data.error;
+      } catch (_) {
+        histError = "Could not fetch calls";
+      } finally {
+        loadingHist = false;
+        render();
+      }
+    }
+
+    async function openHistory(cid) {
+      selectedHist = cid;
+      detail = null;
+      render();
+      try {
+        const r = await fetch(`/admin/calls/${encodeURIComponent(cid)}`, { cache: "no-store" });
+        if (!r.ok) return;
+        detail = await r.json();
+        render();
+      } catch (_) { /* empty pane */ }
+    }
+
+    function renderPane() {
+      const pane = document.getElementById("pane");
+      if (tab === "live") {
+        const row = live.find((c) => c.id === selectedLive);
+        if (!row) {
+          pane.innerHTML = `<h2>Select a call</h2><p class="empty" style="margin-top:12px">Click a row for the log.</p>`;
+          return;
+        }
+        const events = (row.events || []).map((ev) => `
+          <div class="ev">
+            <div class="call-top">
+              <span class="mono" style="font-size:12px">${esc(ev.tool)}</span>
+              <span class="mono ${statusClass(ev.status)}" style="font-size:11px">${esc(ev.status)}</span>
+            </div>
+            <div class="meta mono">${when(ev.t)}${ev.summary ? "  " + esc(ev.summary) : ""}</div>
+          </div>`).join("");
+        const transcript = row.transcript
+          ? `<h3>Transcript</h3><pre>${esc(row.transcript)}</pre>` : "";
+        pane.innerHTML = `<h2>${esc(row.role)} ${esc(row.session_id)}</h2>${events}${transcript}`;
+        return;
+      }
+      if (!selectedHist) {
+        pane.innerHTML = `<h2>Select a call</h2><p class="empty" style="margin-top:12px">Click a row for the log.</p>`;
+        return;
+      }
+      if (!detail) {
+        pane.innerHTML = `<h2>${esc(selectedHist)}</h2><p class="empty" style="margin-top:12px">Loading…</p>`;
+        return;
+      }
+      const tools = (detail.tools || []).map((tool) => `
+        <div class="ev">
+          <div class="call-top">
+            <span class="mono" style="font-size:12px">${esc(tool.name)}</span>
+            <span class="mono ${tool.error ? "st-dead" : "st-real"}" style="font-size:11px">${tool.error ? "error" : "ok"}</span>
+          </div>
+          ${tool.params && tool.params !== "{}" ? `<pre>${esc(tool.params)}</pre>` : ""}
+          ${tool.result ? `<pre style="color:var(--faint)">${esc(tool.result)}</pre>` : ""}
+        </div>`).join("");
+      const turns = (detail.turns || []).length
+        ? `<h3>Transcript</h3>${detail.turns.map((t) => `
+            <div class="turn"><div class="role mono">${esc(t.role)}</div><p>${esc(t.text)}</p></div>`).join("")}`
+        : detail.transcript
+          ? `<h3>Transcript</h3><pre>${esc(detail.transcript)}</pre>` : "";
+      pane.innerHTML = `<h2>${esc(detail.role)} ${esc(detail.conversation_id)}</h2>${tools}${turns}`;
+    }
+
+    function render() {
+      const list = document.getElementById("list");
+      document.getElementById("tab-live").className = tab === "live" ? "on" : "";
+      document.getElementById("tab-hist").className = tab === "history" ? "on" : "";
+      if (tab === "live") {
+        list.innerHTML = `
+          <div class="row-head">
+            <h1>Live calls</h1>
+            <span class="mono tnum meta">${live.length}</span>
+          </div>
+          ${live.length === 0
+            ? `<p class="empty">No in-memory sessions yet.</p>`
+            : `<ol>${live.map((c) => `
+                <li><button type="button" class="call ${selectedLive === c.id ? "sel" : ""}" data-live="${esc(c.id)}">
+                  <div class="call-top">
+                    <span class="call-title">${esc(c.role)}${c.summary ? " · " + esc(c.summary) : ""}</span>
+                    <span class="mono ${statusClass(c.status)}" style="font-size:11px">${esc(
+                      c.current_tool && c.status === "in_flight" ? c.current_tool : c.status
+                    )}</span>
+                  </div>
+                  <div class="meta mono">${esc(c.session_id)}${c.listing_id ? " · " + esc(c.listing_id) : ""}</div>
+                  ${toolRail(c.tools, c.current_tool)}
+                </button></li>`).join("")}</ol>`}`;
+      } else {
+        list.innerHTML = `
+          <div class="row-head">
+            <h1>Last calls</h1>
+            <button type="button" class="linkish mono" id="btn-fetch" style="font-size:11px">${loadingHist ? "Fetching…" : "Fetch"}</button>
+          </div>
+          ${histError ? `<p class="err">${esc(histError)}</p>` : ""}
+          ${history.length === 0 && !loadingHist
+            ? `<p class="empty">Fetch to load the last ElevenLabs conversations.</p>`
+            : `<ol>${history.map((c) => `
+                <li><button type="button" class="call ${selectedHist === c.conversation_id ? "sel" : ""}" data-hist="${esc(c.conversation_id)}">
+                  <div class="call-top">
+                    <span class="call-title">${esc(c.role)}${c.direction ? " · " + esc(c.direction) : ""}</span>
+                    <span class="mono ${statusClass(c.status)}" style="font-size:11px">${esc(c.status || "—")}</span>
+                  </div>
+                  <div class="meta mono" style="display:flex;justify-content:space-between;gap:16px">
+                    <span>${esc(c.conversation_id)}</span>
+                    <span class="tnum">${c.duration_secs != null ? c.duration_secs + "s" : ""}</span>
+                  </div>
+                  ${(c.tools || []).length ? `<div class="meta mono" style="color:var(--muted);margin-top:4px">${esc(c.tools.join(" — "))}</div>` : ""}
+                </button></li>`).join("")}</ol>`}`;
+        const btn = document.getElementById("btn-fetch");
+        if (btn) btn.onclick = () => void loadHistory();
+      }
+      list.querySelectorAll("[data-live]").forEach((el) => {
+        el.onclick = () => { selectedLive = el.getAttribute("data-live"); render(); };
+      });
+      list.querySelectorAll("[data-hist]").forEach((el) => {
+        el.onclick = () => void openHistory(el.getAttribute("data-hist"));
+      });
+      renderPane();
+    }
+
+    document.getElementById("tab-live").onclick = () => { tab = "live"; render(); };
+    document.getElementById("tab-hist").onclick = () => {
+      tab = "history";
+      render();
+      if (!history.length && !loadingHist) void loadHistory();
+    };
+    render();
+    pollLive();
+    setInterval(pollLive, 1200);
+  </script>
+</body>
+</html>
