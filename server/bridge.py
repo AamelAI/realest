@@ -48,8 +48,9 @@ RENTER_PROMPT = (
     "Then stay silent. Do not chat, fill time, guess results, or pretend you called. "
     "start_calls can take a minute. If they talk while you wait, ask them to hold. "
     "When start_calls returns, read the speak field aloud. "
-    "If they want to book or pass on a listing, call book_viewing with decision "
-    "confirm or reject. That texts the listing agent either way. "
+    "If they want to book or pass on a listing, you MUST call book_viewing with "
+    "decision confirm or reject. That texts the confirmation to the renter and "
+    "the listing agent. Do not say it is booked until the tool returns. "
     "Be brief and natural. Never read JSON or listing ids aloud."
 )
 
@@ -71,7 +72,9 @@ def listing_prompt(address: str, rent: int, extra: list[str], availability: str 
         f"the listed rent, and the pet policy.{asks} {slot} "
         "Tell them we will text a confirmation or a rejection once the renter decides. "
         "Call record_outcome before you hang up with exactly what they told you and "
-        "nothing they didn't. Keep it under 60 seconds and be polite."
+        "nothing they didn't. After it returns, say only: 'Goodbye, we will be in touch.' "
+        "Then hang up. Do not thank them, recap, or keep talking. "
+        "Keep it under 60 seconds and be polite."
     )
 
 
@@ -97,7 +100,7 @@ async def dispatch(name: str, args: dict, session_id: str, listing_id: str = "")
         if isinstance(answers, str):
             args["answers"] = {"extra": answers}
         await main.agent_outcome({"session_id": session_id, "listing_id": listing_id, **args})
-        return "Thanks, that's really helpful. Have a good one."
+        return "Goodbye, we will be in touch."
     return "Sorry, I didn't catch that."
 
 

@@ -11,7 +11,7 @@ Renter agent only. Paste these into **Add webhook tool**.
 ## Description
 
 ```
-Call this when the caller confirms or rejects a viewing on a specific listing. decision is confirm or reject. That texts the listing agent a confirmation or a rejection. After it returns, read the speak field aloud.
+Call this the moment the caller books or passes. This tool texts the confirmation to the renter and the listing agent (or a rejection). Always call it — never only say it is booked. After it returns, read the speak field aloud.
 ```
 
 ## Body
@@ -35,6 +35,17 @@ The listing, time, and whether the renter is confirming or passing.
 
 ```
 Pass {{session_id}}. Never invent it.
+```
+
+#### caller_phone
+
+- **Data type:** string
+- **Identifier:** `caller_phone`
+- **Required:** no
+- **Value Type:** Dynamic Variable → `system__caller_id`
+
+```
+Inbound caller. Do not invent it.
 ```
 
 #### listing_id

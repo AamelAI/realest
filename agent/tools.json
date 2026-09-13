@@ -49,7 +49,7 @@
         {
             "type": "function",
             "name": "book_viewing",
-            "description": "Call this when the caller confirms or rejects a viewing. decision is confirm or reject. That texts the listing agent either way.",
+            "description": "Call this the moment the caller books or passes. This tool texts the confirmation or rejection. Always call it — never only say it is booked. After it returns, read speak aloud.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -63,7 +63,7 @@
         {
             "type": "function",
             "name": "record_outcome",
-            "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess: the entire product rests on these facts having come from a human.",
+            "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess. After it returns, say only: Goodbye, we will be in touch. Then hang up.",
             "parameters": {
                 "type": "object",
                 "properties": {

@@ -8,6 +8,7 @@ validation, retries, and duplicate-prevention. No Twilio credentials needed -
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -199,6 +200,22 @@ async def _run() -> None:
         m["to"] == "+14165551234" and m["body"].startswith("Confirmed:")
         for m in fake.messages.sent))
     check("decision reject in response", r.get("decision") == "reject")
+
+    print("\nbooking confirmation: always texts even if listing dest was lost")
+    reset_sms_module_state()
+    fake = use_fake_twilio()
+    os.environ["DEMO_AGENT_PHONE"] = "4165550199"
+    sid3 = "s-book-redest"
+    await main.agent_preferences({"session_id": sid3, "beds": 2, "max_rent": 4000})
+    await new_session(sid3)
+    r3 = await main.agent_book({"session_id": sid3, "slot": "Saturday 2pm"})
+    check("booked without listing_id", r3.get("decision") == "confirm")
+    check("renter confirmation sent without dest map", r3.get("renter_sms") is True)
+    check("landlord confirmation sent from DEMO_AGENT_PHONE",
+          r3.get("landlord_sms") is True)
+    check("landlord number used", any(
+        m["to"] == "+14165550199" and "Confirmed viewing" in m["body"]
+        for m in fake.messages.sent))
 
     calls.SMS_LINK_DELAY_S = 5  # restore the real constant for anything after this module
 
