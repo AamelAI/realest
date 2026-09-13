@@ -244,6 +244,8 @@ export function Board({
               selected={picks}
               onToggle={toggle}
               starting={starting?.ids}
+              elapsed={elapsed}
+              maxRent={state.preferences.max_rent}
             />
 
             {promptOpen && (

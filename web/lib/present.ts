@@ -81,6 +81,84 @@ export function statusOf(card: Card, starting = false): Status {
   }
 }
 
+/* ── the status line: what happened, and who said so ─────────────────────── */
+
+export type StatusLine = {
+  /** the word, set in its colour */
+  word: string;
+  /** who said it and when, verbatim — or the next step */
+  detail: string;
+  /** a live call length to show in mono after the detail */
+  clock: boolean;
+  tone: string;
+  dot: string;
+};
+
+/**
+ * One line that replaces the tinted pill. The attributed fact is the badge:
+ * "Confirmed · Mark, 1:42pm" says more than a green "Real" ever could.
+ *
+ * `outcome.source` is free-form text written by the call extractor, so it is
+ * rendered exactly as it arrived — never parsed, never reformatted, and never
+ * given a time it didn't come with.
+ */
+export function statusLineOf(card: Card, starting = false): StatusLine {
+  const o = card.outcome;
+  const src = o?.source?.trim() ?? "";
+  if (starting && isSelectable(card.status)) {
+    return { word: "Starting call…", detail: "", clock: false, tone: LIVE, dot: LIVE };
+  }
+  switch (card.status) {
+    case "calling":
+      return {
+        word: "On the phone",
+        detail: card.agent_name ? `with ${card.agent_name}` : "",
+        clock: true, tone: LIVE, dot: LIVE,
+      };
+    case "verified":
+      return { word: "Confirmed", detail: src, clock: false, tone: REAL, dot: REAL };
+    case "booked":
+      return { word: "Booked", detail: src, clock: false, tone: REAL, dot: REAL };
+    case "dead":
+      return { word: "Leased", detail: src, clock: false, tone: DEAD, dot: DEAD };
+    case "no_answer":
+      return { word: "No answer", detail: "Draft ready", clock: false, tone: QUIET, dot: NONE };
+    default:
+      return { word: "Not checked yet", detail: "", clock: false, tone: NONE, dot: "var(--color-line)" };
+  }
+}
+
+/* ── facts: two inks, so a human's word never looks like a listing's claim ── */
+
+export type Fact = { text: string; kind: "call" | "listed" | "conflict" };
+
+/**
+ * What the card knows beyond the rent. A fact a person said on the phone and a
+ * claim copied from the listing must never look the same — the first is the
+ * product, the second is what the product exists to check.
+ *
+ * Only numeric conflicts are called out (the real rent over the renter's cap).
+ * Free-text judgements like "cats only vs. a dog" are left to the renter.
+ */
+export function factsOf(card: Card, maxRent?: number | null): Fact[] {
+  const o = card.outcome;
+  const out: Fact[] = [];
+  const now = o?.real_rent ?? card.rent;
+  if (maxRent && maxRent > 0 && now > maxRent) {
+    out.push({ text: `Over your ${money(maxRent)} budget`, kind: "conflict" });
+  }
+  if (o) {
+    for (const a of o.addons) out.push({ text: cap(a), kind: "call" });
+    if (o.pets_allowed) out.push({ text: cap(o.pets_allowed), kind: "call" });
+    if (o.viewing_slot) out.push({ text: `Viewing ${o.viewing_slot}`, kind: "call" });
+    for (const [k, v] of Object.entries(o.answers ?? {})) out.push({ text: `${cap(k)}: ${v}`, kind: "call" });
+    return out;
+  }
+  if (card.parking_included) out.push({ text: "Parking included", kind: "listed" });
+  if (card.pets) out.push({ text: `Pets: ${card.pets}`, kind: "listed" });
+  return out;
+}
+
 /* ── the note: what the call actually turned up ──────────────────────────── */
 
 export function noteOf(card: Card): string {
