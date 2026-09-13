@@ -112,6 +112,11 @@ async def next_assets(request: Request, path: str):
     return await web_proxy.proxy_to_web(request, f"/_next/{path}")
 
 
+@app.api_route("/icon.svg", methods=["GET", "HEAD"])
+async def next_icon(request: Request):
+    return await web_proxy.proxy_to_web(request, "/icon.svg")
+
+
 @app.get("/api/state")
 async def read_state(session: str):
     """The page polls this every 1-1.5s. Rank on write, never on read."""

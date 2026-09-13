@@ -10,6 +10,8 @@ from fastapi.responses import FileResponse
 
 _STATIC = Path(__file__).resolve().parent / "static"
 _UPSTREAM = os.getenv("WEB_UPSTREAM", "http://127.0.0.1:3000").rstrip("/")
+# httpx decompresses the upstream body, so never forward encoding/length
+# headers — browsers will refuse to render ("content encoding error").
 _HOP = {
     "connection",
     "keep-alive",
@@ -21,6 +23,7 @@ _HOP = {
     "upgrade",
     "host",
     "content-length",
+    "content-encoding",
 }
 
 
