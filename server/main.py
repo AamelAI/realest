@@ -13,20 +13,16 @@ import logging
 import os
 import secrets
 
-from pathlib import Path
-
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 
 import admin as monitor
 import calls
 import listings as L
 import state as store
+import web_proxy
 from schemas import CallOutcome, CallStatus, ListingState, Preferences
-
-_STATIC = Path(__file__).resolve().parent / "static"
 
 log = logging.getLogger("realest.main")
 
@@ -84,13 +80,6 @@ def _cards(session) -> list[dict]:
     return out
 
 
-@app.get("/admin")
-@app.get("/admin/")
-async def admin_page():
-    """Browser UI for the live/history monitor (same origin as /admin/* APIs)."""
-    return FileResponse(_STATIC / "admin.html")
-
-
 @app.get("/admin/live")
 async def admin_live():
     return await monitor.live_payload()
@@ -104,6 +93,23 @@ async def admin_calls(limit: int = 20):
 @app.get("/admin/calls/{conversation_id}")
 async def admin_call_detail(conversation_id: str):
     return await monitor.detail_payload(conversation_id)
+
+
+@app.api_route("/admin", methods=["GET", "HEAD"])
+@app.api_route("/admin/", methods=["GET", "HEAD"])
+async def admin_page(request: Request):
+    """Next.js admin UI on the VM (proxied; falls back to static HTML)."""
+    return await web_proxy.proxy_to_web(request, "/admin")
+
+
+@app.api_route("/api/admin/{path:path}", methods=["GET", "HEAD", "POST"])
+async def admin_api_proxy(request: Request, path: str):
+    return await web_proxy.proxy_to_web(request, f"/api/admin/{path}")
+
+
+@app.api_route("/_next/{path:path}", methods=["GET", "HEAD"])
+async def next_assets(request: Request, path: str):
+    return await web_proxy.proxy_to_web(request, f"/_next/{path}")
 
 
 @app.get("/api/state")
