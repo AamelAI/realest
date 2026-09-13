@@ -16,11 +16,11 @@
             "properties": [{
                     "id": "session_id",
                     "type": "string",
-                    "description": "Use session_id from the last tool result. Omit on the first inbound call. Never invent it.",
-                    "dynamic_variable": "",
+                    "description": "",
+                    "dynamic_variable": "session_id",
                     "constant_value": "",
-                    "value_type": "llm_prompt",
-                    "required": false,
+                    "value_type": "dynamic_variable",
+                    "required": true,
                     "enum": null
                 },
                 {
