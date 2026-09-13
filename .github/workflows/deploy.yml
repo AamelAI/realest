@@ -1,0 +1,74 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH (jump → app)
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          JUMP_HOST: 203.0.113.10
+          APP_HOST: 192.168.211.11
+          APP_USER: ubuntu
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          cat > ~/.ssh/config <<EOF
+          Host jump
+            HostName ${JUMP_HOST}
+            User ${APP_USER}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking accept-new
+          Host app
+            HostName ${APP_HOST}
+            User ${APP_USER}
+            ProxyJump jump
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking accept-new
+          EOF
+          sed -i 's/^          //' ~/.ssh/config
+
+      - name: Rsync repo to /home/ubuntu/base
+        run: |
+          set -euo pipefail
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude '.venv/' \
+            --exclude '.env' \
+            --exclude '.env.local' \
+            --exclude 'deploy/' \
+            --exclude 'web/node_modules/' \
+            --exclude 'web/.next/' \
+            --exclude '__pycache__/' \
+            --exclude 'data/listings.json' \
+            --exclude 'data/preview.html' \
+            ./ app:~/base/
+
+      - name: Sync deps and restart service
+        run: |
+          set -euo pipefail
+          ssh app 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          cd /home/ubuntu/base
+          uv sync
+          sudo systemctl restart realest.service
+          sleep 2
+          curl -sf http://127.0.0.1:8000/health
+          echo
+          echo "deployed ${GITHUB_SHA:-unknown}"
+          REMOTE
