@@ -3,7 +3,7 @@
 
     uv run python scripts/test_start_calls.py
     uv run python scripts/test_start_calls.py --listing-ids L100 --extra-questions 'are dogs allowed'
-    uv run python scripts/test_start_calls.py --to +14375550100 --listing-ids L100,L086
+    uv run python scripts/test_start_calls.py --to '+14165550101,+14165550102' --listing-ids L100,L086
     uv run python scripts/test_start_calls.py --http --listing-ids L100
     uv run python scripts/test_start_calls.py --stub --listing-ids L095
     uv run python scripts/test_start_calls.py --field pets=dog --field beds=2
@@ -62,13 +62,15 @@ def build_payload(args: argparse.Namespace) -> dict:
 
 
 def main() -> int:
-    demo = os.getenv("DEMO_AGENT_PHONE", "").strip() or "+14375550100"
+    demo = os.getenv("DEMO_AGENT_PHONE", "").strip()
     ap = argparse.ArgumentParser(description="Call start_calls with custom fields")
     ap.add_argument("--session-id", default="", help="Reuse a session. Minted if omitted.")
     ap.add_argument("--listing-ids", default="", help="CSV, e.g. L100 or L100,L086")
     ap.add_argument("--extra-questions", default="", help="CSV of extra asks for the listing agent")
     ap.add_argument("--caller", default="", help="Renter E.164, if you want SMS / session reuse")
-    ap.add_argument("--to", default=demo, help=f"Listing-agent number to ring (default {demo})")
+    ap.add_argument("--to", default=demo,
+                    help="CSV of listing-agent numbers (overrides DEMO_AGENT_PHONE). "
+                         "One listing is dialed per number, then we stop.")
     ap.add_argument("--field", action="append", default=[], metavar="KEY=VALUE",
                     help="Any extra body field. Repeatable. JSON/bool/int coerced.")
     ap.add_argument("--http", action="store_true",
@@ -95,12 +97,16 @@ def main() -> int:
 
     payload = build_payload(args)
     mode = os.getenv("TRANSPORT", "stub")
-    print(f"{D}  transport={mode}  provider={os.getenv('VOICE_PROVIDER', '') or '—'}  to={args.to}{X}")
+    sys.path.insert(0, str(ROOT / "server"))
+    import calls as _calls
+    phones = _calls.demo_phones()
+    print(f"{D}  transport={mode}  provider={os.getenv('VOICE_PROVIDER', '') or '—'}{X}")
+    print(f"{D}  demo phones ({len(phones)}): {phones}{X}")
     print(f"{D}  payload {json.dumps(payload, indent=2)}{X}")
     if args.dry:
         return 0
     if mode == "voice":
-        print(f"{Y}! ringing {args.to} — the listing phone should get a call{X}")
+        print(f"{Y}! ringing {phones} — one listing per number, then stop{X}")
 
     if args.http:
         return _via_http(args.url, payload)
@@ -129,6 +135,7 @@ def _via_http(url: str, payload: dict) -> int:
 
 async def _via_import(args: argparse.Namespace, payload: dict) -> int:
     import calls
+    import listings as L
     import main
     import state as store
     import transport
@@ -177,10 +184,11 @@ async def _via_import(args: argparse.Namespace, payload: dict) -> int:
     sid = result.get("session_id")
     s = store.get(sid) if sid else None
     if s:
-        print(f"{D}  session {sid}  dest={calls.destination(sid, None)}  says={s.agent_says!r}{X}")
+        print(f"{D}  session {sid}  says={s.agent_says!r}{X}")
         for st in s.listings:
+            dest = calls.destination(sid, L.by_id(st.listing_id))
             oc = "outcome" if st.outcome else "—"
-            print(f"    {st.listing_id:<6}  {st.status.name:<12}  {oc}  {st.email_draft and 'email' or ''}")
+            print(f"    {st.listing_id:<6}  {st.status.name:<12}  {dest or '—':<16}  {oc}  {st.email_draft and 'email' or ''}")
         pending = [st.listing_id for st in s.listings if st.status is CallStatus.PENDING]
         dialed = [st.listing_id for st in s.listings if st.status is not CallStatus.PENDING]
         if pending and dialed:

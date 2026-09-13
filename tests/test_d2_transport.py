@@ -10,6 +10,7 @@ Twilio/OpenAI credentials and no phone involved.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -44,29 +45,31 @@ async def _run() -> list[str]:
     _check("all pending, none calling/verified yet",
            all(l.status is CallStatus.PENDING for l in s.listings), failures)
 
-    ids = [l.listing_id for l in s.listings[:2]]
-    first = ids[0]
+    ids = [l.listing_id for l in s.listings[:3]]
+    os.environ["DEMO_AGENT_PHONE"] = "4375550101,4375550102"
 
-    print(f"\nstep 2 - start_calls({ids}) dials only the first listing through the stub")
+    print(f"\nstep 2 - start_calls({ids}) dials one listing per demo number")
     r2 = await main.agent_start_calls({"session_id": sid, "listing_ids": ids, "extra_questions": ["is there a locker?"]})
     _check("handler returned before hanging", isinstance(r2.get("speak"), str), failures)
-    _check("called only the first listing", r2.get("called") == 1, failures, f"called={r2.get('called')}")
-    _check("rings the demo listing-agent number",
-           bool(r2.get("to")), failures, f"to={r2.get('to')}")
+    _check("called as many listings as demo numbers", r2.get("called") == 2, failures, f"called={r2.get('called')}")
+    _check("returns dest per listing",
+           isinstance(r2.get("to"), list) and len(r2.get("to") or []) == 2,
+           failures, f"to={r2.get('to')}")
 
     s2 = store.get(sid)
     by_id = {l.listing_id: l for l in s2.listings}
-    got = by_id[first].status
-    _check(f"{first} was the one dialed", got is not CallStatus.PENDING, failures, f"status={got}")
-    _check(f"{first} resolved out of CALLING", got is not CallStatus.CALLING, failures, f"status={got}")
-    if by_id[first].outcome is not None:
-        _check(f"{first} has provenance (raw_transcript non-empty)",
-               bool(by_id[first].outcome.raw_transcript), failures)
-        _check(f"{first} outcome.source is always set (2.1's own acceptance criterion)",
-               bool(by_id[first].outcome.source), failures)
-    if len(ids) > 1:
-        skipped = ids[1]
-        _check(f"{skipped} was not dialed",
+    for lid in ids[:2]:
+        got = by_id[lid].status
+        _check(f"{lid} was dialed", got is not CallStatus.PENDING, failures, f"status={got}")
+        _check(f"{lid} resolved out of CALLING", got is not CallStatus.CALLING, failures, f"status={got}")
+        if by_id[lid].outcome is not None:
+            _check(f"{lid} has provenance (raw_transcript non-empty)",
+                   bool(by_id[lid].outcome.raw_transcript), failures)
+            _check(f"{lid} outcome.source is always set (2.1's own acceptance criterion)",
+                   bool(by_id[lid].outcome.source), failures)
+    if len(ids) > 2:
+        skipped = ids[2]
+        _check(f"{skipped} stopped at end of demo numbers",
                by_id[skipped].status is CallStatus.PENDING and by_id[skipped].outcome is None,
                failures, f"status={by_id[skipped].status}")
 
@@ -85,10 +88,10 @@ async def _run() -> list[str]:
     try:
         r5 = await main.agent_start_calls({"session_id": sid, "listing_ids": ids, "extra_questions": []})
         _check("declines to call and drafts email instead",
-               r5.get("called") == 0 and r5.get("emailed") == 1, failures)
+               r5.get("called") == 0 and r5.get("emailed") == 2, failures)
         s5 = store.get(sid)
-        _check("email_draft present on the first card only",
-               bool(next(l.email_draft for l in s5.listings if l.listing_id == first)), failures)
+        emailed = [l.listing_id for l in s5.listings if l.listing_id in ids[:2] and l.email_draft]
+        _check("email_draft present on the paired cards", len(emailed) == 2, failures, f"{emailed}")
     finally:
         calls.within_business_hours = real_check
 

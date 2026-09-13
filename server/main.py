@@ -161,7 +161,7 @@ _CALLER_KEYS = (
 
 
 def _apply_caller(payload: dict) -> str:
-    """Inbound caller as E.164. Accepts +1437…, +111111111111, or (437) 555-0100."""
+    """Inbound caller as E.164. Accepts +1416…, 4165550101, or (416) 555-0101."""
     if not isinstance(payload, dict):
         return ""
     for block in _walk_dicts(payload):
@@ -355,7 +355,7 @@ async def _ensure_call_targets(sid: str, ids: list[str]) -> list[str]:
     """Always have at least one listing to dial. Empty ids is why 'call them' no-ops."""
     s = store.get(sid)
     if not ids:
-        ids = [st.listing_id for st in (s.listings if s else [])[:1]]
+        ids = [st.listing_id for st in (s.listings if s else [])]
     if not ids:
         pool = L.load()
         ids = [pool[0].listing_id] if pool else []
@@ -393,17 +393,12 @@ def _resolve_listing_id(payload: dict, session_id: str) -> str:
 
 @app.post("/agent/start-calls")
 async def agent_start_calls(payload: dict):
-    """Verify the top listing. Demo: one ring, always DEMO_AGENT_PHONE."""
+    """Verify shortlist listings. One ring per DEMO_AGENT_PHONE, then stop."""
     sid = _ensure_session(payload)
     ids = await _ensure_call_targets(
         sid, _resolve_ids(_as_list(payload.get("listing_ids")), sid)
     )
-    if len(ids) > 1:
-        log.info("start-calls[%s]: demo — only first %s, skip %s", sid, ids[0], ids[1:])
-        ids = ids[:1]
-    demo = calls.as_e164(os.getenv("DEMO_AGENT_PHONE", "")) or "+14375550100"
-    calls.set_session_dest(sid, demo)
-    ids = calls.unique_destinations(sid, ids)
+    ids = calls.assign_demo_targets(sid, ids)
     extra = _as_list(payload.get("extra_questions"))
     phone = _apply_caller(payload)
 
@@ -427,17 +422,21 @@ async def agent_start_calls(payload: dict):
             if st.listing_id in ids:
                 st.status = CallStatus.CALLING
 
+    dests = [calls.destination(sid, L.by_id(lid)) for lid in ids]
     n = len(ids)
-    dest = calls.destination(sid, L.by_id(ids[0]))
-    spoken = f"Calling the listing agent now - watch your screen."
+    spoken = (
+        "Calling the listing agents now - watch your screen."
+        if n > 1 else
+        "Calling the listing agent now - watch your screen."
+    )
     await store.mutate(sid, write)
     await store.mutate(sid, lambda s: setattr(s, "agent_says", spoken))
-    log.info("start-calls[%s]: dial %s as listing-agent → %s", sid, ids, dest)
+    log.info("start-calls[%s]: dial %s → %s", sid, ids, dests)
     await calls.fan_out(sid, ids, extra)
     s = store.get(sid)
     if s and s.agent_says:
         spoken = s.agent_says
-    return {"speak": spoken, "session_id": sid, "called": n, "to": dest}
+    return {"speak": spoken, "session_id": sid, "called": n, "to": dests}
 
 
 @app.post("/agent/outcome")
