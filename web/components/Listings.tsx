@@ -1,11 +1,22 @@
 "use client";
 
-import { useRef } from "react";
-import { statusOf, noteOf, rentOf, isSelectable } from "@/lib/present";
+import { useEffect, useRef } from "react";
+import { Money } from "./Money";
+import { statusLineOf, factsOf, isSelectable } from "@/lib/present";
+import { clock } from "@/lib/useCallTimers";
 import type { Card } from "@/lib/types";
 
-const SLOT = 154;   // one card's share of the column
-const CARD = 144;   // the card itself; the 10px difference is the visual gap
+/**
+ * One slot height for every rank. Consistent slots put every attribute in the
+ * same place on every card, so the eye can rule a listing out without reading
+ * it — and a fixed pitch is what lets the reorder stay a pure transform.
+ */
+// Sized for the tallest real content: a two-line address beside the photo, a
+// corrected price (the animated figure renders taller than its line height, so
+// its digits can roll), and the facts line. Rows never shrink to fit.
+const CARD = 224;
+const GAP = 10;
+const SLOT = CARD + GAP;
 
 /**
  * The reorder is the centrepiece, so the list is never re-rendered into a new
@@ -23,14 +34,26 @@ export function Listings({
   selecting,
   selected,
   onToggle,
+  starting = [],
+  elapsed = {},
+  maxRent,
+  onOpen,
 }: {
   cards: Card[];
-  /** the prompt is open, so checkboxes show */
+  /** the prompt is open, so cards are tappable to choose who to call */
   selecting: boolean;
   selected: string[];
   onToggle: (id: string) => void;
+  /** tapped to call, not yet reflected by the server */
+  starting?: string[];
+  /** seconds on the phone, per listing */
+  elapsed?: Record<string, number>;
+  maxRent?: number | null;
+  /** tap a card: open its details, growing out of where it sits */
+  onOpen: (id: string, rect: DOMRect) => void;
 }) {
   const rank = new Map(cards.map((c, i) => [c.listing_id, i]));
+  const order = cards.map((c) => c.listing_id).join(",");
 
   // Paint order = first-seen order, held across polls. New listings append.
   const seen = useRef<string[]>([]);
@@ -40,126 +63,240 @@ export function Listings({
   const byId = new Map(cards.map((c) => [c.listing_id, c]));
   const stable = seen.current.map((id) => byId.get(id)).filter((c): c is Card => Boolean(c));
 
+  // When cards cross, the one moving up passes over the ones it overtakes.
+  // Left DOM order to decide, a promoted card would slide underneath. The lift
+  // persists until that card moves again — cards never overlap at rest, and
+  // resetting it on a timer would drop it mid-travel on the next re-render.
+  const prevRank = useRef(new Map<string, number>());
+  const lift = useRef(new Map<string, number>());
+  for (const c of cards) {
+    const now = rank.get(c.listing_id)!;
+    const before = prevRank.current.get(c.listing_id);
+    if (before !== undefined && before !== now) lift.current.set(c.listing_id, before - now);
+  }
+  useEffect(() => {
+    prevRank.current = new Map(rank);
+    // `order` is the only real dependency; `rank` is derived from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order]);
+
   return (
-    <div className="relative mx-[14px]" style={{ height: cards.length * SLOT + 8 }}>
-      {stable.map((card) => (
-        <Row
-          key={card.listing_id}
-          card={card}
-          rank={rank.get(card.listing_id) ?? 0}
-          selecting={selecting && isSelectable(card.status)}
-          selected={selected.includes(card.listing_id)}
-          onToggle={onToggle}
-        />
-      ))}
+    <div
+      className="relative isolate mx-4 mt-4"
+      style={{ height: cards.length * SLOT, transition: "height 520ms cubic-bezier(.23,1,.32,1)" }}
+    >
+      {stable.map((card) => {
+        const r = rank.get(card.listing_id) ?? 0;
+        return (
+          <Row
+            key={card.listing_id}
+            card={card}
+            rank={r}
+            z={50 + (lift.current.get(card.listing_id) ?? 0)}
+            selecting={selecting && isSelectable(card.status)}
+            selected={selected.includes(card.listing_id)}
+            onToggle={onToggle}
+            starting={starting.includes(card.listing_id)}
+            seconds={elapsed[card.listing_id]}
+            maxRent={maxRent}
+            onOpen={onOpen}
+          />
+        );
+      })}
     </div>
   );
 }
 
 function Row({
-  card, rank, selecting, selected, onToggle,
+  card, rank, z, selecting, selected, onToggle, starting, seconds, maxRent, onOpen,
 }: {
-  card: Card; rank: number; selecting: boolean; selected: boolean;
+  card: Card;
+  rank: number;
+  z: number;
+  selecting: boolean;
+  selected: boolean;
   onToggle: (id: string) => void;
+  starting: boolean;
+  seconds?: number;
+  maxRent?: number | null;
+  onOpen: (id: string, rect: DOMRect) => void;
 }) {
-  const s = statusOf(card);
-  const note = noteOf(card);
-  const rent = rentOf(card);
+  const id = card.listing_id;
+  const lead = rank === 0;
+  const dead = card.status === "dead";
+  const status = statusLineOf(card, starting);
+  const facts = factsOf(card, maxRent);
+
+  // Selection is a ring plus a check — never colour or fill alone. The lead
+  // card carries the only shadow on the page; everything else is a hairline.
+  const ring = selecting && selected ? "0 0 0 1.5px var(--color-ink)" : "";
+  const lift = lead ? "0 1px 2px rgba(26,24,21,.04), 0 6px 16px rgba(26,24,21,.05)" : "";
+  const boxShadow = [ring, lift].filter(Boolean).join(", ") || "none";
 
   return (
     <article
-      className="absolute left-0 right-0 flex overflow-hidden rounded-[14px] bg-surface"
+      data-listing-id={id}
+      data-rank={rank}
+      className="absolute inset-x-0 top-0"
       style={{
         height: CARD,
+        zIndex: z,
         transform: `translateY(${rank * SLOT}px)`,
-        transition: "transform .6s cubic-bezier(.2,.8,.2,1), opacity .4s, border-color .4s",
-        border: `1px solid ${s.proven ? "var(--real-40)" : "var(--hair-card)"}`,
-        boxShadow: "0 1px 2px rgba(20,22,26,.05)",
-        opacity: s.dead ? 0.62 : 1,
+        transition: "transform 520ms cubic-bezier(.23,1,.32,1)",
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={card.photo_url}
-        alt=""
-        loading="lazy"
-        className="h-full w-[92px] shrink-0 object-cover"
-        style={{ background: "#e3e1dc" }}
-      />
+      <div
+        data-card
+        className="r-rise relative h-full rounded-card border bg-surface"
+        style={{
+          borderColor: "var(--color-line)",
+          boxShadow,
+          // Dealt in rank order. On page open they wait for the header and chips.
+          animationDelay: `calc(var(--intro-on, 0) * 260ms + ${Math.min(rank, 6) * 70}ms)`,
+        }}
+      >
+        {/* Tapping the card opens it. A real button covers the content, so the
+            card has one obvious action and its visible text labels it. */}
+        <button
+          type="button"
+          data-open
+          aria-haspopup="dialog"
+          aria-labelledby={`addr-${id}`}
+          aria-describedby={`status-${id}`}
+          onClick={(e) => onOpen(id, e.currentTarget.parentElement!.getBoundingClientRect())}
+          onPointerMove={(e) => {
+            // Where the glass sheen sits: follows the pointer across the card.
+            const el = e.currentTarget.parentElement!;
+            const r = el.getBoundingClientRect();
+            el.style.setProperty("--mx", `${e.clientX - r.left}px`);
+            el.style.setProperty("--my", `${e.clientY - r.top}px`);
+          }}
+          className="absolute inset-0 z-[1] cursor-pointer rounded-card [touch-action:manipulation]"
+        />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-[4px] px-3 py-[11px]">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <span className="shrink-0 font-mono text-[11px] tnum text-faint">
-            {String(rank + 1).padStart(2, "0")}
-          </span>
-          <h3
-            className="min-w-0 truncate text-[14.5px] font-semibold tracking-[-0.01em]"
-            style={{ textDecoration: s.dead ? "line-through" : "none" }}
+        {/* Choosing who to call is the circle — its own control, with a 44px
+            target around the 24px mark. */}
+        {selecting && (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={selected}
+            aria-label={`Call the agent for ${card.address}`}
+            onClick={() => onToggle(id)}
+            className="absolute right-1 top-1.5 z-[2] flex h-11 w-11 cursor-pointer items-center justify-center rounded-full [touch-action:manipulation]"
           >
-            {card.address}
-          </h3>
-        </div>
+            <Check on={selected} />
+          </button>
+        )}
 
-        <p className="truncate text-[11.5px] text-muted">
-          {card.beds} bed · {card.neighbourhood} · {card.transit_note}
-        </p>
+        <div className="pointer-events-none relative flex h-full flex-col overflow-hidden p-3.5">
+          {/* the claim: where, and what the listing says it is */}
+          <div className="flex shrink-0 gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={card.photo_url}
+              alt=""
+              loading="lazy"
+              className="h-[72px] w-[72px] shrink-0 rounded-photo object-cover"
+              style={{
+                background: "var(--color-press)",
+                filter: dead ? "grayscale(1)" : undefined,
+                opacity: dead ? 0.7 : 1,
+              }}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <h3
+                  id={`addr-${id}`}
+                  className={`line-clamp-2 text-address font-strong ${dead ? "text-ink-3 line-through" : ""}`}
+                >
+                  {card.address}
+                </h3>
+                {selecting && <span aria-hidden className="h-6 w-6 shrink-0" />}
+              </div>
+              <p className="mt-0.5 truncate text-support text-ink-2">
+                <span className="tnum text-ink-3">#{rank + 1}</span>
+                {" · "}
+                {card.beds} bed · {card.baths} bath · {card.neighbourhood}
+              </p>
+            </div>
+          </div>
 
-        <div className="flex items-baseline gap-2">
-          {rent.was && (
-            <span className="font-mono text-[11.5px] tnum text-faint line-through">{rent.was}</span>
-          )}
-          <span className="font-mono text-[15px] font-medium tnum">{rent.now}</span>
-        </div>
+          {/* the money, and where it stands */}
+          <div className="mt-4 flex shrink-0 items-end justify-between gap-3">
+            <Money card={card} lead={lead} maxRent={maxRent} />
 
-        {/* What the call turned up, and who said it. The handoff folds
-            provenance into this line rather than giving it its own row — the
-            card is a fixed 144px and a second row overflows it. */}
-        {(note || card.outcome?.source) && (
-          <p
-            className="line-clamp-3 text-[11px] leading-[1.35]"
-            style={{ color: s.proven || s.dead ? s.fg : "var(--color-muted)" }}
-          >
-            {note}
-            {card.outcome?.source && (
-              <span className="text-faint">{note ? " — " : ""}{card.outcome.source}</span>
+            <div id={`status-${id}`} className="min-w-0 max-w-[52%] shrink text-right">
+              <p
+                className="flex items-center justify-end gap-1.5 text-support font-label"
+                style={{ color: status.tone }}
+              >
+                <span
+                  aria-hidden
+                  className="inline-block h-[7px] w-[7px] shrink-0 rounded-full"
+                  style={{ background: status.dot }}
+                />
+                <span key={status.word} className="r-in truncate">{status.word}</span>
+              </p>
+              {(status.detail || (status.clock && seconds !== undefined)) && (
+                <p key={status.detail} className="r-in truncate text-meta text-ink-3">
+                  {status.detail}
+                  {status.clock && seconds !== undefined && (
+                    <span className="font-mono tnum"> · {clock(seconds)}</span>
+                  )}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* what a human said, in ink; what the listing claims, in grey */}
+          <p className="mt-auto shrink-0 truncate pt-2 text-support">
+            {facts.length ? (
+              facts.map((f, i) => (
+                <span key={i}>
+                  {i > 0 && <span className="text-ink-3"> · </span>}
+                  {f.kind === "listed" && facts.findIndex((x) => x.kind === "listed") === i && (
+                    <span className="text-ink-3">Listed: </span>
+                  )}
+                  <span
+                    className={f.kind === "listed" ? "text-ink-2" : "font-label"}
+                    style={{
+                      color:
+                        f.kind === "conflict" ? "var(--color-dead)"
+                        : f.kind === "call" ? "var(--color-ink)"
+                        : undefined,
+                    }}
+                  >
+                    {f.kind === "listed" ? f.text.toLowerCase() : f.text}
+                  </span>
+                </span>
+              ))
+            ) : (
+              <span className="text-ink-3">{card.transit_note}</span>
             )}
           </p>
-        )}
-      </div>
-
-      <div className="flex w-[76px] shrink-0 flex-col items-end justify-between py-[11px] pr-[11px]">
-        <span
-          className="whitespace-nowrap rounded-[7px] px-2 py-[4px] text-[10px] font-semibold"
-          style={{ background: s.bg, color: s.fg }}
-        >
-          {s.label}
-        </span>
-
-        {selecting && (
-          <label className="flex cursor-pointer items-center justify-center p-1">
-            {/* The real input is visually hidden, so the focus ring has to be
-                painted on the box beside it — otherwise a keyboard user can tab
-                onto this control and see nothing at all. */}
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={() => onToggle(card.listing_id)}
-              className="peer sr-only"
-            />
-            <span className="sr-only">Call the agent for {card.address}</span>
-            <span
-              aria-hidden
-              className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] text-[14px] font-bold text-white transition-colors peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[color:var(--color-accent)]"
-              style={{
-                border: `1.5px solid ${selected ? "var(--color-accent)" : "rgba(20,22,26,.2)"}`,
-                background: selected ? "var(--color-accent)" : "#fff",
-              }}
-            >
-              {selected ? "✓" : ""}
-            </span>
-          </label>
-        )}
+        </div>
       </div>
     </article>
+  );
+}
+
+/** The visible half of the checkbox. The button over the card is the real control. */
+function Check({ on }: { on: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150"
+      style={{
+        borderColor: on ? "var(--color-ink)" : "var(--color-line)",
+        background: on ? "var(--color-ink)" : "var(--color-surface)",
+      }}
+    >
+      {on && (
+        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
+          <path d="M3.5 8.5l3 3 6-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </span>
   );
 }

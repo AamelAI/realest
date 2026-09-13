@@ -16,7 +16,7 @@ import type { Card } from "./types";
  * opened mid-call therefore counts from when it opened, which is honest about
  * what this device knows and never renders a wrong-looking large number.
  */
-export function useCallTimers(listings: Card[]): Record<string, number> {
+export function useCallTimers(listings: Card[], paused = false): Record<string, number> {
   const [starts, setStarts] = useState<Record<string, number>>({});
   // A call that has ended keeps its final length. Without this the panel reads
   // "0:00" the moment the last line hangs up.
@@ -53,12 +53,15 @@ export function useCallTimers(listings: Card[]): Record<string, number> {
   }, [onCall]);
 
   // One interval for the whole board, and only while someone is on the phone.
+  // Paused while the connection is stale: we can't see the call, so the clock
+  // stops rather than ticking on as if we could. On resume it jumps to the
+  // real elapsed time, which is the honest number.
   useEffect(() => {
-    if (!onCall) return;
+    if (!onCall || paused) return;
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [onCall]);
+  }, [onCall, paused]);
 
   const elapsed: Record<string, number> = { ...frozen };
   for (const [id, start] of Object.entries(starts)) {
