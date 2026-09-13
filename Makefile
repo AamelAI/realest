@@ -1,4 +1,4 @@
-.PHONY: pull reload dev tunnel web seed check listings preview bridge spike eleven-spike eleven-tools calls tools install doctor help
+.PHONY: pull reload dev tunnel web seed check listings preview bridge spike eleven-spike eleven-tools calls start-call tools install doctor help
 
 help:
 	@grep -E '^[a-z]+:' Makefile | grep -v '^\.PHONY' | sed 's/:.*//' | sed 's/^/  make /'
@@ -58,6 +58,20 @@ eleven-tools:       ## print webhook tools with PUBLIC_URL filled in
 
 calls:              ## browse ElevenLabs call logs (list, then pick one)
 	@bash scripts/call_logs.sh $(ID)
+
+start-call:         ## hit start_calls with custom fields: make start-call LISTING=L100 Q='pets?'
+	uv run python scripts/test_start_calls.py \
+		$(if $(LISTING),--listing-ids "$(LISTING)",) \
+		$(if $(Q),--extra-questions "$(Q)",) \
+		$(if $(TO),--to "$(TO)",) \
+		$(if $(SID),--session-id "$(SID)",) \
+		$(if $(CALLER),--caller "$(CALLER)",) \
+		$(if $(HTTP),--http,) \
+		$(if $(STUB),--stub,) \
+		$(if $(LIVE),--live,) \
+		$(if $(DRY),--dry,) \
+		$(if $(URL),--url "$(URL)",) \
+		$(ARGS)
 
 preview:            ## QA page: every listing + link to the real rentals.ca page
 	uv run python scripts/preview.py && open data/preview.html
