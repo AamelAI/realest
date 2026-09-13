@@ -111,6 +111,28 @@ The listing call is not the product. The card flip is.
 
 **Webhook (the shot).** The Listing agent’s `record_outcome` POSTs `/agent/outcome` with `session_id` + `listing_id` as dynamic variables. That writes `CallOutcome`, re-ranks, and the page reshuffles. Do not let the model invent those ids.
 
+Each outcome is also pushed into the **live renter call** over ElevenLabs real-time monitoring (`contextual_update`). That is background context — it does not interrupt. `start_calls` still waits until every listing call finishes, then returns `speak`. Enable **Monitoring** on the Renter agent (Advanced) or the inject is a no-op.
+
+```mermaid
+sequenceDiagram
+  participant Renter
+  participant Init as agent_init
+  participant Start as start_calls
+  participant Listing
+  participant Outcome as agent_outcome
+  participant Monitor as ElevenLabs_monitor_WS
+
+  Renter->>Init: inbound pickup
+  Init->>Init: store session_id plus renter conversation_id
+  Renter->>Start: start_calls waits
+  Start->>Listing: fan_out place_call plus watch
+  Listing->>Outcome: record_outcome or poll extract
+  Outcome->>Outcome: write card, rerank
+  Outcome->>Monitor: contextual_update
+  Start-->>Renter: speak recap
+```
+
+
 **Poll (the safety net).** After `place_call`, the server polls `GET /v1/convai/conversations/{id}` every 5s for up to 90s. If the webhook already wrote an outcome, the poll stops. If the call ends with a transcript and no webhook, `extract_outcome()` fills the card. If nothing arrives, the card goes `no_answer` and an email is drafted. Cards must not stay `calling`.
 
 **Inbound session.** `/agent/init` mints `session_id` at pickup and texts the shortlist link as soon as we have `caller_id` (bare `+111111111111` is fine — we normalize to E.164). Wire this or the SMS never leaves:
