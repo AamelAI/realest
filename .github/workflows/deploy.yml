@@ -58,17 +58,18 @@ jobs:
             --exclude 'data/preview.html' \
             ./ app:~/base/
 
-      - name: Sync deps and restart service
+      - name: Sync deps and restart backend + admin UI
         run: |
           set -euo pipefail
           ssh app 'bash -s' <<'REMOTE'
           set -euo pipefail
-          export PATH="$HOME/.local/bin:$PATH"
+          export PATH="$HOME/.local/bin:/usr/bin:$PATH"
           cd /home/ubuntu/base
           uv sync
           sudo systemctl restart realest.service
           sleep 2
           curl -sf http://127.0.0.1:8000/health
           echo
+          bash scripts/deploy_web.sh
           echo "deployed ${GITHUB_SHA:-unknown}"
           REMOTE
