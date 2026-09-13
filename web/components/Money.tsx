@@ -1,7 +1,17 @@
 "use client";
 
+import NumberFlow from "@number-flow/react";
 import { money } from "@/lib/present";
 import type { Card } from "@/lib/types";
+
+// Hoisted so NumberFlow sees the same object every render. narrowSymbol keeps
+// it "$3,470" rather than "CA$3,470".
+const CAD = {
+  style: "currency",
+  currency: "CAD",
+  currencyDisplay: "narrowSymbol",
+  maximumFractionDigits: 0,
+} as const;
 
 /**
  * The rent, and the correction when a human gave us one.
@@ -31,14 +41,24 @@ export function Money({
   return (
     <div className="min-w-0">
       <div aria-hidden className="flex items-baseline gap-1">
-        <span className={`${lead ? "text-rent-lead" : "text-rent"} font-strong tnum`}>
-          {money(now)}
-        </span>
+        {/* One instance, always mounted in the same place, so when a human
+            corrects the rent it rolls digit by digit to the real figure —
+            no invented in-between values, and a snap under reduced motion. */}
+        <NumberFlow
+          value={now}
+          format={CAD}
+          locales="en-CA"
+          className={`${lead ? "text-rent-lead" : "text-rent"} font-strong tnum`}
+        />
         <span className="text-support text-ink-2">/mo</span>
       </div>
 
       {corrected && (
-        <div aria-hidden className="mt-1 flex items-baseline gap-2 text-support">
+        <div
+          aria-hidden
+          className="r-in mt-1 flex items-baseline gap-2 text-support"
+          style={{ animationDelay: "280ms" }}
+        >
           <span className="text-ink-3">
             Listed <s className="tnum">{money(listed)}</s>
           </span>

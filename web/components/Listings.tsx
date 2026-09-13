@@ -75,7 +75,10 @@ export function Listings({
   }, [order]);
 
   return (
-    <div className="relative isolate mx-4 mt-4" style={{ height: cards.length * SLOT }}>
+    <div
+      className="relative isolate mx-4 mt-4"
+      style={{ height: cards.length * SLOT, transition: "height 520ms cubic-bezier(.23,1,.32,1)" }}
+    >
       {stable.map((card) => {
         const r = rank.get(card.listing_id) ?? 0;
         return (
@@ -135,8 +138,13 @@ function Row({
       }}
     >
       <div
-        className="relative h-full rounded-card border bg-surface transition-shadow duration-150"
-        style={{ borderColor: "var(--color-line)", boxShadow }}
+        className="r-rise relative h-full rounded-card border bg-surface transition-shadow duration-150"
+        style={{
+          borderColor: "var(--color-line)",
+          boxShadow,
+          // Dealt in rank order. On page open they wait for the header and chips.
+          animationDelay: `calc(var(--intro-on, 0) * 260ms + ${Math.min(rank, 6) * 70}ms)`,
+        }}
       >
         {/* The whole card is the target while choosing. A real button sits over
             the content, so there is exactly one interactive thing per card and
@@ -200,10 +208,10 @@ function Row({
                   className="inline-block h-[7px] w-[7px] shrink-0 rounded-full"
                   style={{ background: status.dot }}
                 />
-                <span className="truncate">{status.word}</span>
+                <span key={status.word} className="r-in truncate">{status.word}</span>
               </p>
               {(status.detail || (status.clock && seconds !== undefined)) && (
-                <p className="truncate text-meta text-ink-3">
+                <p key={status.detail} className="r-in truncate text-meta text-ink-3">
                   {status.detail}
                   {status.clock && seconds !== undefined && (
                     <span className="font-mono tnum"> · {clock(seconds)}</span>

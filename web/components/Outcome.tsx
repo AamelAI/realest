@@ -12,7 +12,11 @@ export function Caption({ says }: { says: string }) {
   if (!says) return null;
   return (
     <div className="mx-auto max-w-[820px] px-4 pt-3" aria-live="polite">
-      <p key={says} className="r-in line-clamp-2 text-fact text-ink">
+      <p
+        key={says}
+        className="r-in line-clamp-2 text-fact text-ink"
+        style={{ animationDelay: "calc(var(--intro-on, 0) * 220ms)" }}
+      >
         <span className="text-ink-3">Realest: </span>
         {says}
       </p>
@@ -32,7 +36,7 @@ export function EmailCard({ card }: { card: Card }) {
   return (
     <section
       className="r-in mx-4 mt-4 rounded-card border bg-surface p-4"
-      style={{ borderColor: "var(--color-line)" }}
+      style={{ borderColor: "var(--color-line)", animationDelay: "calc(var(--intro-on, 0) * 620ms)" }}
       aria-label={`Email draft for ${card.address}`}
     >
       <h2 className="text-support font-strong">

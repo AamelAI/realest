@@ -46,6 +46,14 @@ export function Board({
   // that tap landed — so a slow 504 after the calls went out is not a failure.
   const attempt = useRef(0);
   const confirmed = useRef(false);
+  // The page-open choreography plays once, while the page assembles. After that,
+  // anything that appears animates immediately instead of waiting its turn.
+  const [intro, setIntro] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setIntro(false), 1800);
+    return () => clearTimeout(t);
+  }, []);
+
   const phase = phaseOf(state);
   const criteria = useMemo(() => criteriaOf(state.preferences), [state.preferences]);
   const elapsed = useCallTimers(state.listings, stale);
@@ -182,7 +190,10 @@ export function Board({
   }
 
   return (
-    <div className="min-h-dvh bg-ground pb-10">
+    <div
+      className="min-h-dvh bg-ground pb-10"
+      style={{ ["--intro-on" as string]: intro ? 1 : 0 }}
+    >
       <Header
         criteria={criteria}
         fresh={fresh}
