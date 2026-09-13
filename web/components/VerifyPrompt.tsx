@@ -41,7 +41,7 @@ export function VerifyPrompt({
   return (
     <section
       className="r-in mx-4 mt-6 rounded-card border bg-surface p-4"
-      style={{ borderColor: "var(--color-line)" }}
+      style={{ borderColor: "var(--color-line)", animationDelay: "calc(var(--intro-on, 0) * 560ms)" }}
       aria-labelledby="verify-title"
     >
       <h2 id="verify-title" className="text-fact font-strong">

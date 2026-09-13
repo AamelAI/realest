@@ -100,12 +100,50 @@ p { text-wrap: pretty; }
   font-variant-numeric: lining-nums tabular-nums;
 }
 
-/* Entrance for something that appears mid-conversation: short, near-final. */
+/* ── Motion ─────────────────────────────────────────────────────────────────
+   Animate what arrives, never what merely re-rendered. Every entrance starts
+   near its final state and eases out; nothing enters from nothing.
+
+   When the page opens, the board sets --intro-on: 1 for its first second, so
+   the pieces assemble in order — header, chips, the agent's line, then the
+   cards rising one after another. After that it is 0, and anything that
+   appears mid-call animates straight away, without waiting on a choreography
+   that has already played. */
+
+/* Something small appearing mid-conversation: a status word, a caption line. */
 @keyframes rIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: none; }
 }
 .r-in { animation: rIn 240ms var(--ease-out) both; }
+
+/* The header settling in from above. */
+@keyframes rDrop {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+.r-drop { animation: rDrop 360ms var(--ease-out) both; }
+
+/* A chip: the renter's profile growing as they talk. */
+@keyframes rPop {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: none; }
+}
+.r-pop { animation: rPop 280ms var(--ease-out) both; transform-origin: left center; }
+
+/* A listing card arriving. Rises a little further, with the faintest settle
+   in scale, so a shortlist filling in reads as cards being dealt. */
+@keyframes rRise {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+.r-rise { animation: rRise 560ms var(--ease-out) both; }
+
+/* Reduced motion keeps the arrival — as a fade, with no travel or scale. */
+@keyframes rFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 
 /* The one heartbeat on screen. Slow and gentle — a decorative fast pulse reads
    as anxiety, not liveness. */
@@ -118,7 +156,8 @@ p { text-wrap: pretty; }
 /* Reduced motion: no looping or entrance movement, and anything that travels
    lands in place. Colour and opacity changes are left alone. */
 @media (prefers-reduced-motion: reduce) {
-  .r-in, .r-pulse { animation: none !important; }
+  .r-pulse { animation: none !important; }
+  .r-in, .r-drop, .r-pop, .r-rise { animation: rFade 200ms ease both !important; }
   *, *::before, *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;

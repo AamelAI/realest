@@ -34,7 +34,7 @@ export function CallsPanel({
   return (
     <section
       className="r-in mx-4 mt-6 overflow-hidden rounded-card border bg-surface"
-      style={{ borderColor: "var(--color-line)" }}
+      style={{ borderColor: "var(--color-line)", animationDelay: "calc(var(--intro-on, 0) * 560ms)" }}
       aria-label="Calls to listing agents"
     >
       <div

@@ -36,7 +36,7 @@ export function Header({
           paddingTop: "max(12px, env(safe-area-inset-top))",
         }}
       >
-        <div className="mx-auto flex max-w-[820px] items-center gap-2 px-4 pb-3">
+        <div className="r-drop mx-auto flex max-w-[820px] items-center gap-2 px-4 pb-3">
           <h1 className="text-[17px] leading-[22px] font-[560] tracking-[-0.02em]">Realest</h1>
 
           {live && (
@@ -57,13 +57,14 @@ export function Header({
       {criteria.length > 0 && (
         <div className="mx-auto max-w-[820px] px-4 pt-3">
           <ul className="flex flex-wrap gap-1.5" aria-label="What the agent has heard">
-            {criteria.map((c) => {
+            {criteria.map((c, i) => {
               const isNew = fresh.has(c.key);
               return (
                 <li
                   key={c.key}
-                  className="r-in rounded-full border bg-surface px-2.5 py-1 text-meta font-label"
+                  className="r-pop rounded-full border bg-surface px-2.5 py-1 text-meta font-label"
                   style={{
+                    animationDelay: `calc(var(--intro-on, 0) * ${80 + i * 35}ms)`,
                     borderColor: isNew ? "var(--color-ink)" : "var(--color-line)",
                     color: isNew ? "var(--color-ink)" : "var(--color-ink-2)",
                   }}
