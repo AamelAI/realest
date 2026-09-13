@@ -135,21 +135,41 @@ async def read_state(session: str):
 
 # ── the one re-rank path everything funnels through ──────────────────────────
 
-async def rerank(session_id: str, says: str | None = None, shortlist: bool = True):
-    """Rank the whole list, every time. Two triggers only: prefs, and an outcome."""
+async def rerank(
+    session_id: str,
+    says: str | None = None,
+    shortlist: bool = True,
+    refresh: bool = False,
+):
+    """Rank the whole list, every time. Two triggers only: prefs, and an outcome.
+
+    Prefs pass refresh=True so a new area/budget rebuilds the shortlist from
+    the full catalogue. Outcomes keep the current cards and only re-order them.
+    """
     s = store.get(session_id)
     prefs = s.preferences if s else Preferences()
     outcomes = {st.listing_id: st.outcome for st in (s.listings if s else []) if st.outcome}
 
     pool = L.load()
-    if s and s.listings:
-        # Already shortlisted: re-rank exactly those, never widen mid-conversation.
+    if s and s.listings and not refresh:
+        # Outcome path: re-rank exactly those cards, never swap the set.
         keep = {st.listing_id for st in s.listings}
         pool = [l for l in pool if l.listing_id in keep]
 
     ranked = L.rank(pool, prefs, outcomes, previous=s.listings if s else None)
-    if shortlist and (not s or not s.listings):
-        ranked = ranked[:SHORTLIST_SIZE]
+    if shortlist and (refresh or not s or not s.listings):
+        pinned: list = []
+        rest: list = []
+        if refresh and s and s.listings:
+            pin_ids = {
+                st.listing_id for st in s.listings
+                if st.status in (CallStatus.CALLING, CallStatus.BOOKED)
+            }
+            for st in ranked:
+                (pinned if st.listing_id in pin_ids else rest).append(st)
+            ranked = (pinned + rest)[:SHORTLIST_SIZE]
+        else:
+            ranked = ranked[:SHORTLIST_SIZE]
         for i, st in enumerate(ranked, start=1):
             st.rank = i
 
@@ -358,7 +378,7 @@ async def agent_preferences(payload: dict):
     await store.mutate(sid, write)
     if first:
         asyncio.create_task(calls.sms_if_call_alive(sid, f"{WEB_URL}/s/{sid}"))
-    s = await rerank(sid, says="")
+    s = await rerank(sid, says="", refresh=True)
     n = len(s.listings)
     top = L.by_id(s.listings[0].listing_id).address.split(",")[0] if n else ""
     spoken = (f"{n} fit. I've texted you a link - {top} is on top. Have a look while we talk."
