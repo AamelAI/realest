@@ -56,3 +56,58 @@ The agent stays controllable throughout. It asks *"anything else you want me to 
 We would rather say it than have it found in the source. Inbound voice, outbound calls, extraction, ranking, the live page and SMS delivery are all real and were exercised on real phones during the event. The **recorded demo** runs on a scripted call transport so the take is clean and repeatable; that stub mocks the phone network, not the product — its transcripts pass through the same extraction, the same schema and the same re-rank. Listings are a dated snapshot of 104 real Toronto rentals with real addresses, rents and photos. No realtor contact details were ever scraped; every number in the dataset belongs to a teammate, by design. Emails are drafted and displayed, never sent.
 
 **Repo:** https://github.com/AamelAI/realest
+
+---
+
+## Notes for whoever finalizes this (D2)
+
+- **CopilotKit**: named per the required tag list; we evaluated it and didn't
+  end up using it (`docs/SPONSORS.md` documents this decision) — the social
+  post below should stay honest about that rather than imply we did.
+- **The number**: the written description above doesn't invent a measured
+  "X minutes → Y seconds" stat — the `submit` skill is explicit that a
+  fabricated number costs more credibility than it buys. If someone times a
+  real call before submission, add it here.
+
+## Social post
+
+> 🏠 **Realest** — every AI voice agent in real estate works for the
+> brokerage. Ours works for the renter.
+>
+> You call it, describe what you want, and it texts you a live link while
+> you're still talking. It calls listing agents **in parallel** to find out
+> what no listing tells you — still available? real cost with every add-on?
+> pets? — and reorders your shortlist live from what it just learned.
+>
+> Built at Agents, Everywhere (Toronto) for AI Tinkerers and Human Feedback
+> Foundation, hosted by Georgian. Voice runs on **@ElevenLabs** over Twilio;
+> reasoning and extraction on **@OpenAI**, provider-agnostic through
+> **@OpenRouter**. Explored **@CopilotKit** for the live page and shipped
+> plain React + polling instead so the demo can't drop mid-call.
+>
+> #AgentsEverywhere #AITinkerers
+
+---
+
+## Final submission checklist (`7.1`–`7.5`)
+
+Status as of the last `make todo` run plus the latest merged main. Nobody
+should have to reconstruct this from `.claude/skills/submit/` under time
+pressure at 15:00 — check these five off in order, don't submit until all
+five are real.
+
+| # | Item | Task | Owner | Status |
+|---|---|---|---|---|
+| 1 | Project title | — | — | ✅ Done — **Realest** |
+| 2 | Written description | `7.1` (README) + `7.3` (description) | D1 / D2 | ✅ Finalized — inbound/outbound voice confirmed working, claims match the current build |
+| 3 | Public GitHub repo URL | `0.5` + `7.4` | D1 / D4 | 🟡 Description above cites `https://github.com/AamelAI/realest` — verify it's actually public and loads signed out (`7.4`) before relying on this |
+| 4 | Two-minute demo video | `7.2` | D3 | 🔴 Not started as of this check |
+| 5 | Social post (tag OpenAI, Georgian, CopilotKit, OpenRouter, AI Tinkerers, Human Feedback Foundation) | `7.3` | D2 (me) | ✅ Finalized above, all six tagged — **not posted externally yet** |
+
+**Repo hygiene** (`.claude/skills/submit/`'s own checklist) — clean as of the last check:
+- ✅ Commit history real and dated today
+- ✅ No leaked secrets (working tree and full git history)
+- ✅ `.env` gitignored, never committed; `.env.example` current
+- ✅ No absolute laptop paths in tracked files
+- ✅ README setup commands all exist in the Makefile
+- ⬜ "Repo is public" — re-verify on `AamelAI/realest` itself as part of `7.4`
