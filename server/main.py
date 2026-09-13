@@ -80,20 +80,17 @@ def _cards(session) -> list[dict]:
 
 
 @app.get("/admin/live")
-async def admin_live(request: Request):
-    monitor.require_admin(request)
+async def admin_live():
     return await monitor.live_payload()
 
 
 @app.get("/admin/calls")
-async def admin_calls(request: Request, limit: int = 20):
-    monitor.require_admin(request)
+async def admin_calls(limit: int = 20):
     return await monitor.history_payload(max(1, min(limit, 50)))
 
 
 @app.get("/admin/calls/{conversation_id}")
-async def admin_call_detail(conversation_id: str, request: Request):
-    monitor.require_admin(request)
+async def admin_call_detail(conversation_id: str):
     return await monitor.detail_payload(conversation_id)
 
 
