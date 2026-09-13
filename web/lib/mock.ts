@@ -15,7 +15,7 @@ const listing = {
   email_draft: null,
 } satisfies Partial<Card>;
 
-export const MOCK_CARDS: Card[] = [
+const MOCK_CARDS: Card[] = [
   {
     ...listing,
     listing_id: "L086", address: "155 Yorkville Avenue", rent: 2690, beds: 2, baths: 1,

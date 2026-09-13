@@ -5,7 +5,8 @@ import { Header } from "./Header";
 import { Listings } from "./Listings";
 import { VerifyPrompt, DEFAULT_ASKS } from "./VerifyPrompt";
 import { CallsPanel } from "./CallsPanel";
-import { Caption, EmailCard } from "./Outcome";
+import { EmailCard } from "./Outcome";
+import { DetailSheet } from "./DetailSheet";
 import { usePolling } from "@/lib/usePolling";
 import { useCallTimers } from "@/lib/useCallTimers";
 import { criteriaOf, phaseOf, HEADER_STATUS, isSelectable } from "@/lib/present";
@@ -42,6 +43,8 @@ export function Board({
   // at the tap, so we can tell when the server has actually picked it up.
   const [starting, setStarting] = useState<Starting | null>(null);
   const [callFailed, setCallFailed] = useState(false);
+  // The listing opened into its detail view, and where its card was when tapped.
+  const [open, setOpen] = useState<{ id: string; rect: DOMRect } | null>(null);
   // Which tap a late response belongs to, and whether the poll already proved
   // that tap landed — so a slow 504 after the calls went out is not a failure.
   const attempt = useRef(0);
@@ -203,8 +206,6 @@ export function Board({
         pulse={phase !== "waiting" && !stale && calling.length === 0}
       />
 
-      <Caption says={state.agent_says} />
-
       <p aria-live="polite" className="sr-only">{announce}</p>
 
       <main className="mx-auto max-w-[820px]">
@@ -225,6 +226,7 @@ export function Board({
               starting={starting?.ids}
               elapsed={elapsed}
               maxRent={state.preferences.max_rent}
+              onOpen={(id, rect) => setOpen({ id, rect })}
             />
 
             {promptOpen && (
@@ -250,6 +252,18 @@ export function Board({
           </>
         )}
       </main>
+
+      <DetailSheet
+        card={open ? byId.get(open.id) ?? null : null}
+        rank={open ? state.listings.findIndex((l) => l.listing_id === open.id) : 0}
+        originRect={open?.rect ?? null}
+        selectable={!!open && promptOpen && isSelectable(byId.get(open.id)?.status ?? "dead")}
+        selected={!!open && picks.includes(open.id)}
+        onToggle={toggle}
+        onClosed={() => setOpen(null)}
+        maxRent={state.preferences.max_rent}
+        seconds={open ? elapsed[open.id] : undefined}
+      />
     </div>
   );
 }
