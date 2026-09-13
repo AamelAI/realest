@@ -35,23 +35,6 @@
   --color-live: #935a11;     /* on the phone right now · 5.7:1 */
   --color-dead: #af2b25;     /* gone, or over budget · 6.6:1 */
 
-  /* ── Aliases: previous names pointed at the new system so nothing that
-     still uses them disappears mid-migration. Removed once no component
-     references them (guarded by a grep in the final cleanup). ─────────── */
-  --color-muted: #55524e;
-  --color-faint: #6c6864;
-  --color-dim: #d6d3cf;
-  --color-accent: #1a1815;
-  --color-tint: #f3f2f0;
-  --color-panel: #f3f2f0;
-  --color-warm: #fbfaf9;
-  --color-warn: #935a11;
-  --color-none: #6c6864;
-  --color-real-bg: #f3f2f0;
-  --color-warn-bg: #f3f2f0;
-  --color-dead-bg: #f3f2f0;
-  --color-none-bg: #f3f2f0;
-
   --font-display: var(--font-instrument), system-ui, sans-serif;
   --font-mono: var(--font-plex), ui-monospace, monospace;
 
@@ -83,20 +66,6 @@
   --radius-photo: 10px;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-/* Hairlines — all one ink at low alpha. The coloured card edge is gone:
-   status is carried by words, not by borders. */
-:root {
-  --hair-row: rgba(26, 24, 21, 0.06);
-  --hair-head: rgba(26, 24, 21, 0.08);
-  --hair-panel: rgba(26, 24, 21, 0.1);
-  --hair-card: rgba(26, 24, 21, 0.1);
-  --hair-btn: rgba(26, 24, 21, 0.14);
-  --accent-18: rgba(26, 24, 21, 0.1);
-  --accent-25: rgba(26, 24, 21, 0.12);
-  --accent-35: rgba(26, 24, 21, 0.18);
-  --real-40: rgba(26, 24, 21, 0.1);
 }
 
 html {
@@ -144,13 +113,12 @@ p { text-wrap: pretty; }
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.4; }
 }
-.r-pulse,
-.r-pulse-fast { animation: rPulse 2s ease-in-out infinite; }
+.r-pulse { animation: rPulse 2s ease-in-out infinite; }
 
 /* Reduced motion: no looping or entrance movement, and anything that travels
    lands in place. Colour and opacity changes are left alone. */
 @media (prefers-reduced-motion: reduce) {
-  .r-in, .r-pulse, .r-pulse-fast { animation: none !important; }
+  .r-in, .r-pulse { animation: none !important; }
   *, *::before, *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;

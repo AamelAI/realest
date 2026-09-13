@@ -5,14 +5,13 @@ import { Header } from "./Header";
 import { Listings } from "./Listings";
 import { VerifyPrompt, DEFAULT_ASKS } from "./VerifyPrompt";
 import { CallsPanel } from "./CallsPanel";
-import { Verdict, EmailCard } from "./Outcome";
+import { Caption, EmailCard } from "./Outcome";
 import { usePolling } from "@/lib/usePolling";
 import { useCallTimers } from "@/lib/useCallTimers";
 import { criteriaOf, phaseOf, HEADER_STATUS, isSelectable } from "@/lib/present";
 import { ALL_ASKS } from "./VerifyPrompt";
 import type { CallStatus, SessionState } from "@/lib/types";
 
-type SendState = "idle" | "sending" | "sent" | "failed";
 type Starting = { ids: string[]; base: Record<string, CallStatus> };
 
 /**
@@ -47,30 +46,6 @@ export function Board({
   // that tap landed — so a slow 504 after the calls went out is not a failure.
   const attempt = useRef(0);
   const confirmed = useRef(false);
-  // Survives a reload: the backend has no "already sent" flag, and re-arming
-  // this button would mail the listing agent a second time.
-  const [sends, setSends] = useState<Record<string, SendState>>({});
-
-  // Read after mount, never during render — this component server-renders, and
-  // sessionStorage does not exist there.
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(`realest:sent:${sid}`);
-      if (saved) setSends(JSON.parse(saved));
-    } catch {
-      /* private mode — the button simply re-arms, the old behaviour */
-    }
-  }, [sid]);
-
-  useEffect(() => {
-    if (!Object.keys(sends).length) return;
-    try {
-      sessionStorage.setItem(`realest:sent:${sid}`, JSON.stringify(sends));
-    } catch {
-      /* ignore */
-    }
-  }, [sends, sid]);
-
   const phase = phaseOf(state);
   const criteria = useMemo(() => criteriaOf(state.preferences), [state.preferences]);
   const elapsed = useCallTimers(state.listings, stale);
@@ -99,21 +74,18 @@ export function Board({
     .filter((q) => !ALL_ASKS.includes(q))
     .join(" ");
 
-  const rewritten =
-    Boolean(state.agent_says) &&
-    state.listings.some(
-      (l) => l.outcome && ["verified", "booked", "dead"].includes(l.status),
-    );
-
-  // Default to the top three the ranker put up, but never fight a tap.
+  // Default to the top three nobody has called yet — never quietly queue a
+  // listing an agent already confirmed. Those can still be added by hand.
   const callable = new Set(selectable.map((l) => l.listing_id));
-  const picks = (selected ?? selectable.slice(0, 3).map((l) => l.listing_id)).filter((id) =>
+  const uncalled = state.listings.filter((l) => l.status === "pending");
+  const picks = (selected ?? uncalled.slice(0, 3).map((l) => l.listing_id)).filter((id) =>
     callable.has(id),
   );
   const toggle = (id: string) =>
     setSelected(picks.includes(id) ? picks.filter((x) => x !== id) : [...picks, id]);
 
-  const promptOpen = selectable.length > 0 && calling.length === 0 && !starting;
+  // Offer calls while there is something left to check.
+  const promptOpen = uncalled.length > 0 && calling.length === 0 && !starting;
 
   // The tap has landed once any chosen card's status moves — to calling, or
   // straight to no_answer on the out-of-hours path, or past calling entirely if
@@ -153,15 +125,24 @@ export function Board({
   }
 
   // The reorder is the centrepiece, and a screen reader cannot see a transform.
+  // Every reorder is announced, not only a new #1; the first fill is not a
+  // reorder, so an empty board filling up says nothing.
   const order = state.listings.map((l) => l.listing_id).join(",");
+  const topAddress = state.listings[0]?.address ?? "";
   const [announce, setAnnounce] = useState("");
   const prevOrder = useRef(order);
   useEffect(() => {
-    if (prevOrder.current !== order && state.listings.length) {
-      prevOrder.current = order;
-      setAnnounce(`Shortlist reordered: ${state.listings[0].address} now first.`);
-    }
-  }, [order, state.listings]);
+    const before = prevOrder.current;
+    prevOrder.current = order;
+    if (!before || !order || before === order) return;
+    const sameSet = before.split(",").sort().join() === order.split(",").sort().join();
+    if (!sameSet) return;
+    setAnnounce(
+      before.split(",")[0] !== order.split(",")[0]
+        ? `Shortlist reordered. ${topAddress} is now first.`
+        : "Shortlist reordered.",
+    );
+  }, [order, topAddress]);
 
   /**
    * Optimistic, and deliberately not waiting on the response.
@@ -200,21 +181,6 @@ export function Board({
       });
   }
 
-  async function sendEmail(id: string) {
-    setSends((s) => ({ ...s, [id]: "sending" }));
-    try {
-      const r = await fetch("/api/email", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ session_id: sid, listing_id: id }),
-      });
-      const ok = r.ok && (await r.json())?.sent === true;
-      setSends((s) => ({ ...s, [id]: ok ? "sent" : "failed" }));
-    } catch {
-      setSends((s) => ({ ...s, [id]: "failed" }));
-    }
-  }
-
   return (
     <div className="min-h-dvh bg-ground pb-10">
       <Header
@@ -226,14 +192,16 @@ export function Board({
         pulse={phase !== "waiting" && !stale && calling.length === 0}
       />
 
+      <Caption says={state.agent_says} />
+
       <p aria-live="polite" className="sr-only">{announce}</p>
 
       <main className="mx-auto max-w-[820px]">
         {state.listings.length === 0 ? (
-          <div className="px-[26px] py-16 text-center">
-            <p className="text-[14px] font-semibold">Waiting for the call</p>
-            <p className="mt-1 text-[12.5px] leading-[1.5] text-faint">
-              Say what you&rsquo;re after. This page fills in while you talk.
+          <div className="px-6 py-20 text-center">
+            <p className="text-fact font-strong">No listings yet.</p>
+            <p className="mt-1 text-support text-ink-2">
+              They appear here as you describe what you want.
             </p>
           </div>
         ) : (
@@ -251,6 +219,7 @@ export function Board({
             {promptOpen && (
               <VerifyPrompt
                 count={picks.length}
+                names={picks.map((id) => byId.get(id)?.agent_name ?? "")}
                 asks={asks}
                 onToggleAsk={(a) =>
                   setAsks((s) => (s.includes(a) ? s.filter((x) => x !== a) : [...s, a]))
@@ -264,18 +233,8 @@ export function Board({
 
             {called.length > 0 && <CallsPanel cards={called} elapsed={elapsed} stale={stale} />}
 
-            {/* "Shortlist, rewritten" is a claim. Only make it when a call
-                actually returned facts — if every line went to voicemail,
-                nothing was rewritten and the email cards tell the story. */}
-            {rewritten && <Verdict says={state.agent_says} />}
-
             {noAnswer.map((card) => (
-              <EmailCard
-                key={card.listing_id}
-                card={card}
-                onSend={sendEmail}
-                state={sends[card.listing_id] ?? "idle"}
-              />
+              <EmailCard key={card.listing_id} card={card} />
             ))}
           </>
         )}

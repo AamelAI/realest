@@ -10,21 +10,6 @@ import type { Card, CallStatus, SessionState } from "./types";
 
 export const money = (n: number) => "$" + n.toLocaleString("en-CA");
 
-/* ── status ──────────────────────────────────────────────────────────────── */
-
-export type Status = {
-  /** the pill label */
-  label: string;
-  /** the one-line form used in dense rows and the calls panel */
-  short: string;
-  fg: string;
-  bg: string;
-  dot: string;
-  dead: boolean;
-  /** verified-real gets a green card edge */
-  proven: boolean;
-};
-
 // Colour means status and nothing else. Three hues — confirmed, live, gone —
 // and everything else is ink. "No answer" is deliberately not a warning colour:
 // nobody picking up is a normal outcome with the next step already taken.
@@ -34,52 +19,6 @@ const LIVE = "var(--color-live)";
 const DEAD = "var(--color-dead)";
 const QUIET = "var(--color-ink-2)";
 const NONE = "var(--color-ink-3)";
-const CHIP = "var(--color-press)";
-
-export function statusOf(card: Card, starting = false): Status {
-  const o = card.outcome;
-  // The renter tapped call and the server hasn't reflected it yet. This states
-  // what the renter did, not what the phone network is doing — so it is
-  // "Starting call", never an invented "Dialing" or "Ringing".
-  if (starting && isSelectable(card.status)) {
-    return {
-      label: "Starting", short: "Starting call…",
-      fg: LIVE, bg: CHIP, dot: LIVE, dead: false, proven: false,
-    };
-  }
-  switch (card.status) {
-    case "booked":
-      return {
-        label: "Booked", short: o?.viewing_slot ? `Booked · ${o.viewing_slot}` : "Booked",
-        fg: REAL, bg: CHIP, dot: REAL, dead: false, proven: true,
-      };
-    case "verified":
-      return {
-        label: "Real", short: o?.pets_allowed ? `Real · ${o.pets_allowed}` : "Real",
-        fg: REAL, bg: CHIP, dot: REAL, dead: false, proven: true,
-      };
-    case "dead":
-      return {
-        label: "Leased", short: "Leased — still posted",
-        fg: DEAD, bg: CHIP, dot: DEAD, dead: true, proven: false,
-      };
-    case "no_answer":
-      return {
-        label: "Emailed", short: "No answer · emailed",
-        fg: QUIET, bg: CHIP, dot: NONE, dead: false, proven: false,
-      };
-    case "calling":
-      return {
-        label: "Calling", short: "On the phone now",
-        fg: LIVE, bg: CHIP, dot: LIVE, dead: false, proven: false,
-      };
-    default:
-      return {
-        label: "Not checked", short: "Not checked",
-        fg: NONE, bg: CHIP, dot: "var(--color-line)", dead: false, proven: false,
-      };
-  }
-}
 
 /* ── the status line: what happened, and who said so ─────────────────────── */
 
@@ -174,9 +113,8 @@ export function noteOf(card: Card): string {
       return "";
     default: {
       if (!o) return "";
-      // Terse on purpose: the card is a fixed 144px and the note is clamped to
-      // three lines, so anything verbose here pushes the provenance off the
-      // card — and provenance is the half that makes this evidence.
+      // Terse on purpose: this is the one-sentence account of the call shown
+      // under each row of the calls list.
       const bits: string[] = [];
       if (o.addons.length) {
         const real = o.real_rent;
@@ -199,14 +137,6 @@ export function noteOf(card: Card): string {
 }
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
-
-/** Old figure struck, real figure beside it — the correction is the product. */
-export function rentOf(card: Card): { now: string; was: string } {
-  const real = card.outcome?.real_rent ?? null;
-  return real !== null && real !== card.rent
-    ? { now: money(real), was: money(card.rent) }
-    : { now: money(card.rent), was: "" };
-}
 
 /* ── the criteria chips: the renter's profile, updating live ─────────────── */
 
