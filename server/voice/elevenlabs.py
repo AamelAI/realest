@@ -135,6 +135,16 @@ class ElevenLabsProvider:
         self._raise_http(r, "get conversation")
         return r.json()
 
+    async def list_conversations(self, agent_id: str, page_size: int = 20) -> dict:
+        async with self._client(20) as client:
+            r = await client.get(
+                CONVERSATION,
+                headers=self._headers(),
+                params={"agent_id": agent_id, "page_size": page_size},
+            )
+        self._raise_http(r, "list conversations")
+        return r.json()
+
     async def inject_context(self, conversation_id: str, text: str) -> bool:
         """Push a contextual_update into a live renter call. Never raises.
 

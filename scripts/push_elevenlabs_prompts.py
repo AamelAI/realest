@@ -7,7 +7,6 @@ Reads ELEVENLABS_API_KEY and agent ids from .env. Never prints the key.
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -47,75 +46,105 @@ def _patch_prompt(client: httpx.Client, key: str, agent_id: str, prompt: str, la
     return 0
 
 
-def _patch_start_calls(client: httpx.Client, key: str, renter_id: str) -> int:
+def _tool_name(body: dict) -> str:
+    return str((body.get("tool_config") or body).get("name") or body.get("name") or "")
+
+
+def _props(cfg: dict):
+    return ((cfg.get("api_schema") or {}).get("request_body_schema") or {}).get("properties")
+
+
+def _ensure_prop(props, field_id: str, description: str, required: bool = False) -> bool:
+    """Add a string llm_prompt body field if missing. Returns True when mutated."""
+    if isinstance(props, list):
+        if any((p.get("id") or p.get("name")) == field_id for p in props if isinstance(p, dict)):
+            return False
+        props.append({
+            "id": field_id,
+            "type": "string",
+            "description": description,
+            "dynamic_variable": "",
+            "constant_value": "",
+            "value_type": "llm_prompt",
+            "required": required,
+            "enum": None,
+        })
+        return True
+    if isinstance(props, dict):
+        if field_id in props:
+            return False
+        props[field_id] = {"type": "string", "description": description}
+        return True
+    return False
+
+
+def _patch_renter_tools(client: httpx.Client, key: str, renter_id: str) -> int:
     agent = client.get(f"{API}/agents/{renter_id}", headers=_headers(key), timeout=20)
     if agent.status_code >= 400:
         print(f"{R}✗{X} renter GET HTTP {agent.status_code}")
         return 1
     tool_ids = (((agent.json().get("conversation_config") or {}).get("agent") or {})
                 .get("prompt") or {}).get("tool_ids") or []
-    start = None
+    by_name: dict[str, tuple[str, dict]] = {}
     for tid in tool_ids:
         t = client.get(f"{API}/tools/{tid}", headers=_headers(key), timeout=20)
         if t.status_code >= 400:
             continue
         body = t.json()
-        name = (body.get("tool_config") or body).get("name") or body.get("name")
-        if name == "start_calls":
-            start = body
-            start_id = tid
-            break
-    if start is None:
-        print(f"{R}✗{X} start_calls tool not attached to renter agent — paste docs/elevenlabs-tools/start_calls.json")
+        by_name[_tool_name(body)] = (tid, body)
+
+    failed = 0
+    start_desc = (
+        "Call this when the caller wants you to phone a listing agent. "
+        "BEFORE calling it, ask when they are free for viewings and pass that as availability. "
+        "The moment you call it, say: 'Wait until I gather all the information from the real estate agents.' "
+        "Then stay silent until it returns and read the speak field aloud."
+    )
+    book_desc = (
+        "Call this when the caller confirms or rejects a viewing on a specific listing. "
+        "decision is confirm or reject. That texts the listing agent a confirmation or a rejection. "
+        "After it returns, read the speak field aloud."
+    )
+    failed += _write_tool(
+        client, key, by_name, "start_calls", start_desc,
+        [("availability",
+          "When the renter can view, as one short phrase, e.g. weeknights after 6 "
+          "or Saturday morning. Empty if they did not say.")],
+    )
+    failed += _write_tool(
+        client, key, by_name, "book_viewing", book_desc,
+        [("decision",
+          "confirm to book and text the landlord a confirmation. "
+          "reject to text them that the renter is passing. Default confirm.")],
+    )
+    return failed
+
+
+def _write_tool(
+    client: httpx.Client,
+    key: str,
+    by_name: dict[str, tuple[str, dict]],
+    name: str,
+    description: str,
+    fields: list[tuple[str, str]],
+) -> int:
+    if name not in by_name:
+        print(f"{R}✗{X} {name} not attached to renter agent")
         return 1
-
-    cfg = start.get("tool_config") or start
-    schema = ((cfg.get("api_schema") or {}).get("request_body_schema") or {})
-    props = schema.get("properties")
-    field = {
-        "type": "string",
-        "description": (
-            "When the renter can view, as one short phrase, e.g. weeknights after 6 "
-            "or Saturday morning. Empty if they did not say."
-        ),
-    }
-    added = False
-    if isinstance(props, list):
-        if not any((p.get("id") or p.get("name")) == "availability" for p in props if isinstance(p, dict)):
-            props.append({
-                "id": "availability",
-                "type": "string",
-                "description": field["description"],
-                "dynamic_variable": "",
-                "constant_value": "",
-                "value_type": "llm_prompt",
-                "required": False,
-                "enum": None,
-            })
-            added = True
-    elif isinstance(props, dict):
-        if "availability" not in props:
-            props["availability"] = field
-            added = True
-    desc = cfg.get("description") or ""
-    if "availability" not in desc.lower():
-        cfg["description"] = (
-            "Call this when the caller wants you to phone a listing agent. "
-            "BEFORE calling it, ask when they are free for viewings and pass that as availability. "
-            "The moment you call it, say: 'Wait until I gather all the information from the real estate agents.' "
-            "Then stay silent until it returns and read the speak field aloud."
-        )
-        added = True
-    if not added:
-        print(f"{G}✓{X} start_calls already has availability")
-        return 0
-
-    payload = {"tool_config": cfg} if "tool_config" in start else cfg
-    r = client.patch(f"{API}/tools/{start_id}", headers=_headers(key), json=payload, timeout=30)
+    tid, body = by_name[name]
+    cfg = body.get("tool_config") or body
+    cfg["description"] = description
+    props = _props(cfg)
+    for field_id, desc in fields:
+        _ensure_prop(props, field_id, desc)
+    payload = {"tool_config": cfg} if "tool_config" in body else cfg
+    r = client.patch(f"{API}/tools/{tid}", headers=_headers(key), json=payload, timeout=30)
     if r.status_code >= 400:
-        print(f"{R}✗{X} start_calls PATCH HTTP {r.status_code}: {r.text[:240]}")
+        print(f"{R}✗{X} {name} PATCH HTTP {r.status_code}: {r.text[:240]}")
         return 1
-    print(f"{G}✓{X} start_calls tool now includes availability")
+    check = client.get(f"{API}/tools/{tid}", headers=_headers(key), timeout=20).json()
+    got = _tool_name(check)
+    print(f"{G}✓{X} {got} tool updated")
     return 0
 
 
@@ -131,11 +160,15 @@ def main() -> int:
     renter_prompt = (ROOT / "agent" / "renter-prompt.txt").read_text().strip()
     listing_prompt = (ROOT / "agent" / "listing-prompt.txt").read_text().strip()
 
-    with httpx.Client() as client:
+    skip = (os.getenv("ELEVENLABS_INSECURE_SKIP_VERIFY") or "").strip().lower() in {
+        "1", "true", "yes",
+    }
+    print(f"{D}pushing prompts/tools (verify={'off' if skip else 'on'}){X}")
+    with httpx.Client(verify=not skip, timeout=30.0) as client:
         failed = 0
         failed += _patch_prompt(client, key, renter, renter_prompt, "renter")
         failed += _patch_prompt(client, key, listing, listing_prompt, "listing")
-        failed += _patch_start_calls(client, key, renter)
+        failed += _patch_renter_tools(client, key, renter)
         return 1 if failed else 0
 
 
