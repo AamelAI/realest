@@ -2,98 +2,166 @@
 
 /* ─────────────────────────────────────────────────────────────────────────
    Realest — the live surface.
-   Built to the design handoff (design_handoff_realest_verification).
 
-   The renter is on the phone. This page fills in while they talk, reorders
-   when they say something new, and then shows what happened when we rang the
-   listing agents. Three things are load-bearing and must not be softened:
-     · the reorder — one node per listing, moved by transform, never re-sorted
-     · the correction — old rent struck, real rent beside it
-     · provenance — every fact says which agent said it, and when
+   A calm record of phone calls. The renter is on the phone while this page
+   fills in, reorders, and then shows what the listing agents actually said.
+
+   The system, in four rules:
+     · Warm-neutral ink on white. Ink is the primary action and the focus ring.
+     · Colour means status and nothing else: confirmed, live, gone.
+     · Money is the largest thing on screen, set in the sans with tabular figures.
+     · Every fact a human gave us carries their name. Nothing is invented.
+
+   Every text colour below is at least 4.5:1 on white, and no text is set
+   under 13px — the page is read one-handed, and filmed.
    ───────────────────────────────────────────────────────────────────────── */
-@theme {
-  --color-ink: #14161a;
-  --color-muted: #5c6470;
-  --color-faint: #8b93a1;
-  --color-dim: #c7ccd4;
 
-  --color-accent: #3730a3;
-  --color-tint: #f5f4ff;
-
-  --color-ground: #eceef1;
-  --color-panel: #f4f6f8;
-  --color-warm: #fafaf8;
+/* `static` so every variable is emitted even when it is only referenced from
+   an inline style. Without it Tailwind v4 drops unreferenced theme variables,
+   and an inline `var()` that points at nothing silently goes transparent. */
+@theme static {
+  /* Neutrals — one barely-warm hue (OKLCH h≈75), contrast measured on white. */
+  --color-ground: #fbfaf9;
   --color-surface: #ffffff;
+  --color-press: #f3f2f0;
+  --color-ink: #1a1815;      /* 17.7:1 */
+  --color-ink-2: #55524e;    /*  7.8:1 */
+  --color-ink-3: #6c6864;    /*  5.5:1 — the quietest text there is */
+  --color-line: rgba(26, 24, 21, 0.1);
+  --color-hair: rgba(26, 24, 21, 0.06);
 
-  /* status: text colour on its own tint */
-  --color-real: #0b6b4f;
-  --color-real-bg: #e7f3ec;
-  --color-warn: #b45309;
-  --color-warn-bg: #fdf2e3;
-  --color-dead: #b42318;
-  --color-dead-bg: #fdeceb;
-  --color-none: #5c6470;
-  --color-none-bg: #f0f1f3;
+  /* Status — the only colour on the page. */
+  --color-real: #216a49;     /* confirmed by a human · 6.5:1 */
+  --color-live: #935a11;     /* on the phone right now · 5.7:1 */
+  --color-dead: #af2b25;     /* gone, or over budget · 6.6:1 */
+
+  /* ── Aliases: previous names pointed at the new system so nothing that
+     still uses them disappears mid-migration. Removed once no component
+     references them (guarded by a grep in the final cleanup). ─────────── */
+  --color-muted: #55524e;
+  --color-faint: #6c6864;
+  --color-dim: #d6d3cf;
+  --color-accent: #1a1815;
+  --color-tint: #f3f2f0;
+  --color-panel: #f3f2f0;
+  --color-warm: #fbfaf9;
+  --color-warn: #935a11;
+  --color-none: #6c6864;
+  --color-real-bg: #f3f2f0;
+  --color-warn-bg: #f3f2f0;
+  --color-dead-bg: #f3f2f0;
+  --color-none-bg: #f3f2f0;
 
   --font-display: var(--font-instrument), system-ui, sans-serif;
   --font-mono: var(--font-plex), ui-monospace, monospace;
+
+  /* Type scale — whole pixels only. Tighter tracking as size grows. */
+  --text-rent-lead: 32px;
+  --text-rent-lead--line-height: 36px;
+  --text-rent-lead--letter-spacing: -0.02em;
+  --text-rent: 28px;
+  --text-rent--line-height: 32px;
+  --text-rent--letter-spacing: -0.02em;
+  --text-address: 20px;
+  --text-address--line-height: 25px;
+  --text-address--letter-spacing: -0.012em;
+  --text-fact: 17px;
+  --text-fact--line-height: 22px;
+  --text-fact--letter-spacing: -0.01em;
+  --text-support: 15px;
+  --text-support--line-height: 20px;
+  --text-support--letter-spacing: -0.005em;
+  --text-meta: 13px;
+  --text-meta--line-height: 18px;
+
+  /* Variable in-between weights: firm without the heaviness of 600–700. */
+  --font-weight-label: 540;
+  --font-weight-strong: 580;
+
+  --radius-card: 16px;
+  --radius-control: 12px;
+  --radius-photo: 10px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* hairlines — the handoff specifies four weights of the same ink */
+/* Hairlines — all one ink at low alpha. The coloured card edge is gone:
+   status is carried by words, not by borders. */
 :root {
-  --hair-row: rgba(20, 22, 26, 0.07);
-  --hair-head: rgba(20, 22, 26, 0.08);
-  --hair-panel: rgba(20, 22, 26, 0.1);
-  --hair-card: rgba(20, 22, 26, 0.12);
-  --hair-btn: rgba(20, 22, 26, 0.16);
-  --accent-18: rgba(55, 48, 163, 0.18);
-  --accent-25: rgba(55, 48, 163, 0.25);
-  --accent-35: rgba(55, 48, 163, 0.35);
-  --real-40: rgba(11, 107, 79, 0.4);
+  --hair-row: rgba(26, 24, 21, 0.06);
+  --hair-head: rgba(26, 24, 21, 0.08);
+  --hair-panel: rgba(26, 24, 21, 0.1);
+  --hair-card: rgba(26, 24, 21, 0.1);
+  --hair-btn: rgba(26, 24, 21, 0.14);
+  --accent-18: rgba(26, 24, 21, 0.1);
+  --accent-25: rgba(26, 24, 21, 0.12);
+  --accent-35: rgba(26, 24, 21, 0.18);
+  --real-40: rgba(26, 24, 21, 0.1);
 }
 
 html {
-  background: var(--color-surface);
+  background: var(--color-ground);
   -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  background: var(--color-surface);
+  background: var(--color-ground);
   color: var(--color-ink);
   font-family: var(--font-display);
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Figures must not shift between polls, or the rent column twitches on the
-   very tick that corrects a price. */
+/* Headings balance their lines; prose avoids orphans. */
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+
+/* A struck figure is evidence, so its line is deliberate, not browser default. */
+:where(s, del, .line-through) {
+  text-decoration-thickness: 1.5px;
+}
+
+/* Money and clocks only. Figures must not shift between polls, or the rent
+   column twitches on the very tick that corrects a price. Prose keeps
+   proportional figures. */
 .tnum {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
-/* Entrance for every card that appears mid-conversation. */
+/* Entrance for something that appears mid-conversation: short, near-final. */
 @keyframes rIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: none; }
 }
-.r-in { animation: rIn 0.45s both; }
+.r-in { animation: rIn 240ms var(--ease-out) both; }
 
-/* The live dot: page header 1.4s, calls header 1s. */
+/* The one heartbeat on screen. Slow and gentle — a decorative fast pulse reads
+   as anxiety, not liveness. */
 @keyframes rPulse {
   0%, 100% { opacity: 1; }
-  50%      { opacity: 0.35; }
+  50%      { opacity: 0.4; }
 }
-.r-pulse { animation: rPulse 1.4s infinite; }
-.r-pulse-fast { animation: rPulse 1s infinite; }
+.r-pulse,
+.r-pulse-fast { animation: rPulse 2s ease-in-out infinite; }
 
+/* Reduced motion: no looping or entrance movement, and anything that travels
+   lands in place. Colour and opacity changes are left alone. */
 @media (prefers-reduced-motion: reduce) {
+  .r-in, .r-pulse, .r-pulse-fast { animation: none !important; }
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
 }
 
-::selection { background: var(--color-accent); color: #fff; }
-:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+::selection { background: var(--color-ink); color: #fff; }
+
+/* Ink is the focus ring — a 2px outline, offset, so it never looks like the
+   1.5px ring that means "selected". */
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
