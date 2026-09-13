@@ -11,7 +11,7 @@ Renter agent only. Paste these into **Add webhook tool**.
 ## Description
 
 ```
-Call this the moment the caller books or passes. This tool texts the confirmation to the renter and the listing agent (or a rejection). Always call it — never only say it is booked. After it returns, read the speak field aloud.
+Call this when the caller confirms or rejects a viewing, and only after start_calls has returned with the listing results. decision is confirm or reject. That texts the renter and the listing agent. After it returns, read the speak field aloud.
 ```
 
 ## Body

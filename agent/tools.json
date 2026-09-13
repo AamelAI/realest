@@ -23,7 +23,7 @@
         {
             "type": "function",
             "name": "start_calls",
-            "description": "Call this when the caller has confirmed which listings they want verified, or when they give a number to call as the listing agent (e.g. +111111111111). BEFORE calling it, always ask whether there is anything else they want asked on the call. The moment you call it, say: 'Wait until I gather all the information from the real estate agents.' Then stay silent until it returns and read the speak field. Do not guess results.",
+            "description": "Call this when the caller has confirmed which listings they want verified, or when they give a number to call as the listing agent (e.g. +111111111111). BEFORE calling it, always ask whether there is anything else they want asked on the call. The moment you call it, say: 'Wait until I gather all the information from the real estate agents.' Then stay silent until it returns and read the speak field. Do not book or call book_viewing until it returns.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -49,7 +49,7 @@
         {
             "type": "function",
             "name": "book_viewing",
-            "description": "Call this the moment the caller books or passes. This tool texts the confirmation or rejection. Always call it — never only say it is booked. After it returns, read speak aloud.",
+            "description": "Call this when the caller confirms or rejects a viewing, and only after start_calls has returned with the listing results. decision is confirm or reject. That texts the renter and the listing agent.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -63,7 +63,7 @@
         {
             "type": "function",
             "name": "record_outcome",
-            "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess. After it returns, say only: Goodbye, we will be in touch. Then hang up.",
+            "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess. After it returns, say goodbye and that we will be in touch, then hang up.",
             "parameters": {
                 "type": "object",
                 "properties": {

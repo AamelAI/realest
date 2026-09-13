@@ -129,12 +129,13 @@ def _patch_renter_tools(client: httpx.Client, key: str, renter_id: str) -> int:
         "Call this when the caller wants you to phone a listing agent. "
         "BEFORE calling it, ask when they are free for viewings and pass that as availability. "
         "The moment you call it, say: 'Wait until I gather all the information from the real estate agents.' "
-        "Then stay silent until it returns and read the speak field aloud."
+        "Then stay silent until it returns — that can take a minute while listing calls finish — "
+        "and read the speak field aloud. Do not book or call book_viewing until it returns."
     )
     book_desc = (
-        "Call this the moment the caller books or passes. This tool texts the confirmation "
-        "to the renter and the listing agent (or a rejection). Always call it — never only "
-        "say it is booked. After it returns, read the speak field aloud."
+        "Call this when the caller confirms or rejects a viewing, and only after "
+        "start_calls has returned with the listing results. decision is confirm or reject. "
+        "That texts the renter and the listing agent. After it returns, read the speak field aloud."
     )
     failed += _write_tool(
         client, key, by_name, "start_calls", start_desc,
@@ -170,8 +171,8 @@ def _patch_listing_tools(client: httpx.Client, key: str, listing_id: str) -> int
         by_name[_tool_name(body)] = (tid, body)
     outcome_desc = (
         "Call this at the end of the call with everything the listing agent actually said. "
-        "Only fill a field if they said it. Never guess. After it returns, say only: "
-        "'Goodbye, we will be in touch.' Then hang up."
+        "Only fill a field if they said it. Never guess. After it returns, say goodbye "
+        "and that we will be in touch, then hang up."
     )
     return _write_tool(client, key, by_name, "record_outcome", outcome_desc, [])
 
@@ -210,6 +211,7 @@ def _write_tool(
 
 
 def main() -> int:
+    print("loading .env", flush=True)
     load_dotenv(ROOT / ".env")
     key = (os.getenv("ELEVENLABS_API_KEY") or "").strip()
     renter = (os.getenv("ELEVENLABS_RENTER_AGENT_ID") or "").strip()

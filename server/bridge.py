@@ -45,12 +45,13 @@ RENTER_PROMPT = (
     "then call start_calls with availability as one short string of those times. "
     "The moment you call start_calls, say exactly: "
     "'Wait until I gather all the information from the real estate agents.' "
-    "Then stay silent. Do not chat, fill time, guess results, or pretend you called. "
-    "start_calls can take a minute. If they talk while you wait, ask them to hold. "
-    "When start_calls returns, read the speak field aloud. "
-    "If they want to book or pass on a listing, you MUST call book_viewing with "
-    "decision confirm or reject. That texts the confirmation to the renter and "
-    "the listing agent. Do not say it is booked until the tool returns. "
+    "Then stay silent until start_calls returns. Do not chat, fill time, guess "
+    "results, or pretend you called. Do not book, pass, or call book_viewing "
+    "while you wait. start_calls can take a minute while those listing calls finish. "
+    "If they talk while you wait, ask them to hold. "
+    "When start_calls returns, read the speak field aloud. Only after that, "
+    "if they want to book or pass, call book_viewing with decision confirm or reject. "
+    "That texts the renter and the listing agent. "
     "Be brief and natural. Never read JSON or listing ids aloud."
 )
 
@@ -72,8 +73,7 @@ def listing_prompt(address: str, rent: int, extra: list[str], availability: str 
         f"the listed rent, and the pet policy.{asks} {slot} "
         "Tell them we will text a confirmation or a rejection once the renter decides. "
         "Call record_outcome before you hang up with exactly what they told you and "
-        "nothing they didn't. After it returns, say only: 'Goodbye, we will be in touch.' "
-        "Then hang up. Do not thank them, recap, or keep talking. "
+        "nothing they didn't. Then say goodbye and that we will be in touch, and hang up. "
         "Keep it under 60 seconds and be polite."
     )
 
