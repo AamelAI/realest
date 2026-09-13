@@ -44,7 +44,7 @@
         {
             "type": "webhook",
             "name": "start_calls",
-            "description": "Call this when the caller wants you to phone a listing agent, verify a listing, or call +111111111111. BEFORE calling it, ask when they are free for viewings and pass that as availability. Omit listing_ids to call the current shortlist. The moment you call it, say: 'Wait until I gather all the information from the real estate agents.' Then stay silent until it returns — that can take a minute — and read the speak field aloud. Do not guess results or fill the silence.",
+            "description": "Call this when the caller wants you to phone a listing agent, verify a listing, or call +111111111111. BEFORE calling it, ask when they are free for viewings and pass that as availability. Omit listing_ids to call the current shortlist. The moment you call it, say: 'Wait until I gather all the information from the real estate agents.' Then stay silent until it returns — that can take a minute while listing calls finish — and read the speak field aloud. Do not book or call book_viewing until it returns.",
             "api_schema": {
                 "url": "{PUBLIC_URL}/agent/start-calls",
                 "method": "POST",
@@ -78,7 +78,7 @@
         {
             "type": "webhook",
             "name": "book_viewing",
-            "description": "Call this the moment the caller books or passes. This tool texts the confirmation to the renter and the listing agent (or a rejection). Always call it — never only say it is booked. After it returns, read the speak field aloud.",
+            "description": "Call this when the caller confirms or rejects a viewing, and only after start_calls has returned with the listing results. decision is confirm or reject. That texts the renter and the listing agent. After it returns, read the speak field aloud.",
             "api_schema": {
                 "url": "{PUBLIC_URL}/agent/book",
                 "method": "POST",
@@ -133,7 +133,7 @@
         {
             "type": "webhook",
             "name": "record_outcome",
-            "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess. After it returns, say only: Goodbye, we will be in touch. Then hang up.",
+            "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess. After it returns, say goodbye and that we will be in touch, then hang up.",
             "api_schema": {
                 "url": "{PUBLIC_URL}/agent/outcome",
                 "method": "POST",

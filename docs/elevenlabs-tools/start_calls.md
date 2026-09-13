@@ -11,7 +11,7 @@ Renter agent only. Paste these into **Add webhook tool**.
 ## Description
 
 ```
-Call this only after the caller confirmed which listings to verify. BEFORE calling it, ask when they are free for viewings and pass that as availability, then ask if there is anything else they want asked on those calls. The moment you call it, say: "Wait until I gather all the information from the real estate agents." Then stay silent until it returns — that can take a minute — and read the speak field aloud. Do not guess results or fill the silence. listing_ids must be real ids from the last record_preferences shortlist (like L061), never "Listing 2" or an address.
+Call this only after the caller confirmed which listings to verify. BEFORE calling it, ask when they are free for viewings and pass that as availability, then ask if there is anything else they want asked on those calls. The moment you call it, say: "Wait until I gather all the information from the real estate agents." Then stay silent until it returns — that can take a minute while listing calls finish — and read the speak field aloud. Do not book or call book_viewing until it returns. listing_ids must be real ids from the last record_preferences shortlist (like L061), never "Listing 2" or an address.
 ```
 
 ## Body
