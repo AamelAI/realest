@@ -141,8 +141,75 @@ _ended: dict[str, bool] = {}           # session_id -> the call has already ende
 _link_sms_started: set[str] = set()    # session_id -> the 5s link-SMS timer already ran once
 _recent_sms: dict[tuple[str, str], float] = {}  # (to, body) -> last-sent monotonic time
 _conversations: dict[tuple[str, str], str] = {}  # (session, listing) -> ElevenLabs conversation_id
+_renter_conversation: dict[str, str] = {}        # session_id -> inbound renter conversation_id
 
 POLL_EVERY_S = 5
+
+
+def bind_renter_conversation(session_id: str, conversation_id: str) -> str:
+    """Remember the inbound renter ConvAI id so outcomes can inject context."""
+    cid = (conversation_id or "").strip()
+    if not session_id or not cid.startswith("conv_"):
+        return ""
+    _renter_conversation[session_id] = cid
+    log.info("renter conv bound session=%s conv=%s", session_id, cid)
+    return cid
+
+
+def renter_conversation(session_id: str) -> str:
+    return _renter_conversation.get(session_id, "")
+
+
+def _renter_update_line(session_id: str, listing_id: str) -> str:
+    """One spoken-length fact for the live renter model. Not the raw transcript."""
+    lst = L.by_id(listing_id)
+    where = lst.address.split(",")[0] if lst else listing_id
+    card = _listing_card(session_id, listing_id)
+    if card is None:
+        return ""
+    if card.status is CallStatus.NO_ANSWER:
+        line = f"{where}: no answer."
+    elif card.status is CallStatus.DEAD:
+        line = f"{where} is gone - already leased."
+    elif card.outcome and card.outcome.viewing_slot:
+        line = f"{where} is available, {card.outcome.viewing_slot}."
+    elif card.outcome and card.outcome.available is False:
+        line = f"{where} is gone."
+    elif card.outcome and card.outcome.available is True:
+        line = f"{where} is still available."
+    else:
+        line = f"{where}: listing call finished."
+    return (
+        f"Listing call result: {line} "
+        "Tell the renter this when start_calls returns."
+    )
+
+
+async def notify_renter(session_id: str, listing_id: str) -> bool:
+    """Push one listing outcome into the live renter conversation. Never raises."""
+    cid = renter_conversation(session_id)
+    if not cid:
+        log.info("notify_renter[%s]: no renter conversation bound — skip", session_id)
+        return False
+    text = _renter_update_line(session_id, listing_id)
+    if not text:
+        return False
+    try:
+        import voice
+        if not voice.is_elevenlabs():
+            return False
+        inject = getattr(voice.get_provider(), "inject_context", None)
+        if not inject:
+            return False
+        ok = await inject(cid, text)
+        log.info("notify_renter[%s/%s]: inject %s", session_id, listing_id,
+                 "ok" if ok else "failed")
+        return ok
+    except Exception as exc:
+        log.warning("notify_renter[%s/%s]: %s", session_id, listing_id, exc)
+        return False
+
+
 _TERMINAL = frozenset({"done", "failed", "completed", "error", "cancelled"})
 
 
@@ -377,6 +444,7 @@ async def mark_no_answer(session_id: str, listing_id: str, extra_questions: list
                 st.email_draft = draft
 
     await store.mutate(session_id, write)
+    asyncio.create_task(notify_renter(session_id, listing_id))
 
 
 async def extract_outcome(transcript: str, extra_questions: list[str]) -> CallOutcome:

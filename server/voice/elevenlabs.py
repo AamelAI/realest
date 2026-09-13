@@ -5,16 +5,22 @@ No listing or session imports — the caller passes plain strings.
 """
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import os
 
 import httpx
 
 from voice.types import CallHandle, Role
 
+log = logging.getLogger("realest.elevenlabs")
+
 API = "https://api.elevenlabs.io/v1"
 OUTBOUND = f"{API}/convai/twilio/outbound-call"
 USER = f"{API}/user"
 CONVERSATION = f"{API}/convai/conversations"
+MONITOR = "wss://api.elevenlabs.io/v1/convai/conversations/{id}/monitor"
 
 
 class ElevenLabsError(RuntimeError):
@@ -128,3 +134,34 @@ class ElevenLabsProvider:
             )
         self._raise_http(r, "get conversation")
         return r.json()
+
+    async def inject_context(self, conversation_id: str, text: str) -> bool:
+        """Push a contextual_update into a live renter call. Never raises.
+
+        Uses the enterprise monitor socket. Returns False if Monitoring is off,
+        the call already ended, or the key is missing.
+        """
+        cid = (conversation_id or "").strip()
+        body = (text or "").strip()
+        if not cid or not body or not self.api_key:
+            return False
+        async def _send() -> bool:
+            import websockets
+            uri = MONITOR.format(id=cid)
+            async with websockets.connect(
+                uri,
+                additional_headers={"xi-api-key": self.api_key},
+                open_timeout=5,
+                close_timeout=2,
+            ) as ws:
+                await ws.send(json.dumps({
+                    "command_type": "contextual_update",
+                    "parameters": {"contextual_update": body},
+                }))
+            return True
+
+        try:
+            return await asyncio.wait_for(_send(), timeout=8)
+        except Exception as exc:
+            log.warning("inject_context[%s]: %s", cid, exc)
+            return False

@@ -236,6 +236,15 @@ def _as_list(val) -> list[str]:
     return [p.strip() for p in str(val).split(",") if p.strip()]
 
 
+def _bind_renter_conv(sid: str, payload: dict) -> str:
+    """Attach the inbound ElevenLabs conversation to this session if present."""
+    cid = _nested_get(payload, "conversation_id", "system__conversation_id")
+    bound = calls.bind_renter_conversation(sid, cid) if cid else ""
+    if cid and not bound:
+        log.info("renter conv not bound session=%s raw=%s", sid, cid[:24])
+    return bound
+
+
 @app.post("/agent/init")
 async def agent_init(request: Request):
     """ElevenLabs calls this the moment an INBOUND call connects.
@@ -258,6 +267,8 @@ async def agent_init(request: Request):
             s.caller_phone = caller
 
     await store.mutate(sid, write)
+    if not _bind_renter_conv(sid, payload):
+        log.info("inbound session %s · no renter conversation_id", sid)
     link = f"{WEB_URL}/s/{sid}"
     log.info("inbound session %s · caller=%s · called=%s · keys=%s",
              sid, caller or "?", called or "?", sorted(payload.keys()))
@@ -281,6 +292,7 @@ async def agent_init(request: Request):
 async def agent_preferences(payload: dict):
     """Caller described what they want, or reprioritized. Re-rank, speak one line."""
     sid = _ensure_session(payload)
+    _bind_renter_conv(sid, payload)
     first = store.get(sid) is None
     fields = {k: v for k, v in payload.items() if k in Preferences.model_fields and v is not None}
     for key in ("areas", "priority_order", "extra_questions"):
@@ -395,6 +407,7 @@ def _resolve_listing_id(payload: dict, session_id: str) -> str:
 async def agent_start_calls(payload: dict):
     """Verify shortlist listings. One ring per DEMO_AGENT_PHONE, then stop."""
     sid = _ensure_session(payload)
+    _bind_renter_conv(sid, payload)
     ids = await _ensure_call_targets(
         sid, _resolve_ids(_as_list(payload.get("listing_ids")), sid)
     )
@@ -469,6 +482,7 @@ async def agent_outcome(payload: dict):
     async with _outcome_lock:
         await store.mutate(sid, write)
         s = await rerank(sid)
+    asyncio.create_task(calls.notify_renter(sid, lid))
     return {"speak": "Got it, thanks.", "session_id": sid, "agent_says": s.agent_says}
 
 
@@ -499,6 +513,7 @@ async def agent_book(payload: dict):
 async def agent_sms(payload: dict):
     """Text the shortlist link. The model only calls this; Twilio sends it."""
     sid = _ensure_session(payload)
+    _bind_renter_conv(sid, payload)
     phone = _apply_caller(payload)
     link = f"{WEB_URL}/s/{sid}"
 
