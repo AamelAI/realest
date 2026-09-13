@@ -1,0 +1,251 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Realest admin monitor.
+
+   Shared by the Next.js page (web/app/admin) and the FastAPI fallback
+   (server/static/admin.html, which embeds a copy of this file). Change one,
+   change the other.
+
+   A switchboard log, not a dashboard: every renter session is a line, the
+   listing calls it fanned out hang beneath it, and the pane on the right is
+   the tape. Hairline rules instead of boxes, square corners, no shadows.
+   Machine data (times, ids, tool names) is mono with tabular figures; status
+   is a coloured word. Ink, paper and three status colours, nothing else.
+   See .claude/skills/live-surface/design-rules.md.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.adm {
+  --adm-ink: #14161a;
+  --adm-ink-2: #3d434c;
+  --adm-muted: #5c6470;
+  --adm-faint: #8b93a1;
+  --adm-dim: #c9cdd4;
+  --adm-rule: rgba(20, 22, 26, 0.08);
+  --adm-rule-strong: rgba(20, 22, 26, 0.14);
+  --adm-paper: #ffffff;
+  --adm-warm: #fafaf8;
+  --adm-hover: #f6f5f2;
+  --adm-select: #eeede8;
+  --adm-good: #0b6b4f;
+  --adm-warn: #b45309;
+  --adm-bad: #b42318;
+  --adm-sans: var(--font-instrument, "Instrument Sans"), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --adm-mono: var(--font-plex, "IBM Plex Mono"), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --adm-head: 56px;
+
+  min-height: 100svh;
+  background: var(--adm-paper);
+  color: var(--adm-ink);
+  font: 14px/1.45 var(--adm-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A local reset, so the Next page (Tailwind preflight) and the static
+   fallback (no reset at all) render the same. :where() keeps it at zero
+   specificity, so every component rule below wins without a fight. */
+:where(.adm) *,
+:where(.adm) *::before,
+:where(.adm) *::after { box-sizing: border-box; }
+:where(.adm) button {
+  font: inherit; color: inherit; background: none; border: 0; border-radius: 0;
+  padding: 0; margin: 0; cursor: pointer; text-align: inherit;
+}
+:where(.adm) :is(ol, ul) { list-style: none; margin: 0; padding: 0; }
+:where(.adm) :is(h1, h2, h3, p, pre, dl, dd) { margin: 0; }
+:where(.adm) :is(h1, h2, h3) { font-size: inherit; font-weight: inherit; }
+:where(.adm) :focus-visible { outline: 2px solid var(--adm-ink); outline-offset: -2px; }
+
+.adm .mono { font-family: var(--adm-mono); }
+.adm .num { font-family: var(--adm-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* status: a coloured word, never a chip */
+.adm .t-good { color: var(--adm-good); }
+.adm .t-bad { color: var(--adm-bad); }
+.adm .t-warn,
+.adm .t-live { color: var(--adm-warn); }
+.adm .t-quiet { color: var(--adm-muted); }
+
+/* the one piece of motion: a square that breathes while a call is live */
+.adm-dot { display: inline-block; flex: none; width: 6px; height: 6px; background: currentColor; }
+.adm-dot.is-live { animation: adm-breathe 1.4s ease-in-out infinite; }
+@keyframes adm-breathe { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .adm-dot.is-live { animation: none; } }
+
+/* ── header ───────────────────────────────────────────────────────────── */
+
+.adm-top {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: stretch; gap: 36px;
+  height: var(--adm-head); padding: 0 24px;
+  background: var(--adm-paper);
+  border-bottom: 1px solid var(--adm-rule-strong);
+}
+.adm-brand { display: flex; align-items: baseline; gap: 10px; align-self: center; white-space: nowrap; }
+.adm-brand b { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
+.adm-brand span { font-size: 13px; color: var(--adm-muted); }
+
+.adm-tabs { display: flex; gap: 26px; }
+.adm-tab { position: relative; display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--adm-muted); }
+.adm-tab:hover { color: var(--adm-ink); }
+.adm-tab[aria-selected="true"] { color: var(--adm-ink); font-weight: 600; }
+.adm-tab[aria-selected="true"]::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--adm-ink);
+}
+.adm-tab .num { font-size: 11px; font-weight: 400; color: var(--adm-faint); }
+
+.adm-health { margin-left: auto; display: flex; align-items: center; gap: 8px; align-self: center; font-size: 12px; color: var(--adm-muted); white-space: nowrap; }
+.adm-health .num { font-size: 11.5px; }
+
+/* ── figures: the whole switchboard in one line ──────────────────────── */
+
+.adm-figures {
+  display: flex; flex-wrap: wrap; gap: 6px 30px;
+  padding: 13px 24px; border-bottom: 1px solid var(--adm-rule);
+  font-size: 12.5px; color: var(--adm-muted);
+}
+.adm-figures .num { margin-right: 6px; font-size: 13px; font-weight: 500; color: var(--adm-ink); }
+.adm-figures .num.t-good { color: var(--adm-good); }
+.adm-figures .num.t-bad { color: var(--adm-bad); }
+.adm-figures .num.t-warn,
+.adm-figures .num.t-live { color: var(--adm-warn); }
+
+/* ── layout: the log on the left, the tape on the right ──────────────── */
+
+.adm-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(400px, 42%); align-items: start; }
+.adm-list { min-width: 0; padding: 22px 24px 56px; }
+.adm-pane {
+  position: sticky; top: var(--adm-head);
+  min-width: 0; height: calc(100svh - var(--adm-head)); overflow-y: auto;
+  padding: 24px 28px 56px;
+  background: var(--adm-warm);
+  border-left: 1px solid var(--adm-rule-strong);
+}
+
+.adm-listhead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+.adm-listhead h1 { font-size: 13px; font-weight: 600; }
+.adm-listhead .aside { display: flex; align-items: baseline; gap: 14px; font-size: 12px; color: var(--adm-faint); }
+.adm-link {
+  font-size: 12px; color: var(--adm-ink-2);
+  text-decoration: underline; text-decoration-color: var(--adm-dim); text-underline-offset: 3px;
+}
+.adm-link:hover { text-decoration-color: currentColor; }
+.adm-link:disabled { color: var(--adm-faint); cursor: default; text-decoration: none; }
+.adm-error { margin: 0 0 12px; font-size: 12.5px; color: var(--adm-bad); }
+
+/* ── rows ─────────────────────────────────────────────────────────────── */
+
+.adm-rows { border-top: 1px solid var(--adm-rule-strong); }
+.adm-group { border-bottom: 1px solid var(--adm-rule); }
+.adm-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 20px;
+  grid-template-areas: "main end" "rail end";
+  width: 100%; padding: 13px 12px;
+}
+.adm-row:hover { background: var(--adm-hover); }
+.adm-row[aria-current="true"] { background: var(--adm-select); }
+.adm-row-main { grid-area: main; display: block; min-width: 0; }
+.adm-row-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; letter-spacing: -0.005em; }
+.adm-row-title .mono { margin-left: 2px; font-size: 12.5px; font-weight: 400; color: var(--adm-muted); }
+.adm-row-title .soft { font-weight: 400; color: var(--adm-muted); }
+.adm-row-meta { display: block; margin-top: 2px; font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-faint); }
+.adm-row-end { grid-area: end; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; }
+.adm-state { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.adm-when { font-size: 11px; color: var(--adm-faint); white-space: nowrap; }
+
+/* listing calls hang off their session like branches */
+.adm-kids { margin: -4px 0 8px 12px; }
+.adm-kid { position: relative; padding-left: 20px; }
+.adm-kid::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: var(--adm-dim); }
+.adm-kid:last-child::before { bottom: 50%; }
+.adm-kid::after { content: ""; position: absolute; left: 0; top: 50%; width: 13px; height: 1px; background: var(--adm-dim); }
+.adm-kid .adm-row { padding-top: 8px; padding-bottom: 8px; }
+.adm-kid .adm-row-title { font-size: 13.5px; font-weight: 500; }
+
+/* where the renter call has got to, as a line of tool names */
+.adm-rail { grid-area: rail; display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; margin-top: 8px; font-family: var(--adm-mono); font-size: 11px; color: var(--adm-dim); }
+.adm-rail > span { display: inline-flex; align-items: center; }
+.adm-rail > span + span::before { content: "·"; margin: 0 7px; color: var(--adm-dim); font-weight: 400; }
+.adm-rail > .is-done { color: var(--adm-ink-2); }
+.adm-rail > .is-now { color: var(--adm-ink); font-weight: 500; }
+.adm-rail > .is-now.t-live { color: var(--adm-warn); }
+
+/* history rows carry a date column */
+.adm-row.is-hist { grid-template-columns: 76px minmax(0, 1fr) auto; grid-template-areas: "date main end"; }
+.adm-date { grid-area: date; font-family: var(--adm-mono); font-size: 11.5px; line-height: 1.5; color: var(--adm-faint); font-variant-numeric: tabular-nums; }
+.adm-date b { display: block; font-weight: 400; color: var(--adm-ink-2); }
+
+.adm-empty { padding: 40px 0; max-width: 46ch; font-size: 13px; color: var(--adm-muted); }
+.adm-empty b { display: block; margin-bottom: 4px; font-weight: 600; color: var(--adm-ink); }
+
+/* ── the tape ─────────────────────────────────────────────────────────── */
+
+.adm-pane-head { padding-bottom: 18px; border-bottom: 1px solid var(--adm-rule-strong); }
+.adm-pane-head .kicker { display: flex; justify-content: space-between; gap: 16px; font-size: 12px; color: var(--adm-muted); }
+.adm-pane-head h2 { margin-top: 3px; font-size: 19px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; }
+.adm-ids { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 16px; margin-top: 12px; font-size: 12px; }
+.adm-ids dt { color: var(--adm-faint); }
+.adm-ids dd { min-width: 0; font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-ink-2); }
+.adm-copy { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-ink-2); }
+.adm-copy .note { margin-left: 8px; color: var(--adm-faint); opacity: 0; }
+.adm-copy:hover .note,
+.adm-copy:focus-visible .note,
+.adm-copy.is-done .note { opacity: 1; }
+
+.adm-section { margin-top: 28px; }
+.adm-section > h3 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; font-weight: 600; }
+.adm-section > h3 .num { font-size: 11px; font-weight: 400; color: var(--adm-faint); }
+.adm-section > p { margin-top: 8px; font-size: 13px; color: var(--adm-muted); }
+
+.adm-log { margin-top: 8px; border-top: 1px solid var(--adm-rule); }
+.adm-ev {
+  display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; column-gap: 14px; align-items: baseline;
+  padding: 8px 0; border-bottom: 1px solid var(--adm-rule);
+}
+.adm-ev time { font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-faint); font-variant-numeric: tabular-nums; }
+.adm-ev .tool { font-family: var(--adm-mono); font-size: 12px; }
+.adm-ev .note { display: block; margin-top: 1px; font-size: 12px; color: var(--adm-muted); overflow-wrap: anywhere; }
+.adm-ev .adm-state { font-family: var(--adm-mono); font-size: 11.5px; font-weight: 400; }
+
+.adm-calls { margin-top: 8px; border-top: 1px solid var(--adm-rule); }
+.adm-calls li { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--adm-rule); font-size: 13px; }
+.adm-calls .mono { margin-left: 8px; font-size: 11.5px; color: var(--adm-faint); }
+
+.adm-toolcall { padding: 10px 0; border-bottom: 1px solid var(--adm-rule); }
+.adm-toolcall-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.adm-toolcall-head .tool { font-family: var(--adm-mono); font-size: 12px; }
+.adm-kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 14px; margin-top: 6px; font-family: var(--adm-mono); font-size: 11.5px; }
+.adm-kv dt { color: var(--adm-faint); }
+.adm-kv dd { min-width: 0; color: var(--adm-ink-2); overflow-wrap: anywhere; }
+.adm-said { margin-top: 7px; font-size: 13px; color: var(--adm-ink-2); }
+.adm-said::before { content: "said  "; font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-faint); }
+.adm-raw { margin-top: 6px; white-space: pre-wrap; font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-muted); overflow-wrap: anywhere; }
+
+.adm-turns { margin-top: 10px; }
+.adm-turn { display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 14px; padding: 6px 0; }
+.adm-turn .who { padding-top: 2px; font-size: 11.5px; color: var(--adm-faint); }
+.adm-turn.is-us .who { color: var(--adm-ink); font-weight: 500; }
+.adm-turn p { max-width: 64ch; font-size: 13.5px; line-height: 1.5; color: var(--adm-ink-2); }
+.adm-turn.is-us p { color: var(--adm-ink); }
+
+/* ── narrow screens: one column, the tape below the log ──────────────── */
+
+@media (max-width: 1023px) {
+  .adm-body { grid-template-columns: minmax(0, 1fr); }
+  .adm-pane { position: static; height: auto; overflow: visible; border-left: 0; border-top: 1px solid var(--adm-rule-strong); }
+}
+
+@media (max-width: 639px) {
+  .adm-top { flex-wrap: wrap; height: auto; gap: 2px 16px; padding: 12px 16px 0; }
+  .adm-tabs { order: 3; width: 100%; }
+  .adm-tab { padding: 10px 0 11px; }
+  .adm-figures { gap: 4px 20px; padding: 12px 16px; }
+  .adm-list { padding: 18px 16px 36px; }
+  .adm-row { grid-template-areas: "main end" "rail rail"; padding-left: 8px; padding-right: 8px; column-gap: 12px; }
+  .adm-row:not(.is-hist) .adm-when { display: none; }
+  .adm-rail > span + span::before { margin: 0 5px; }
+  .adm-row.is-hist { grid-template-columns: 58px minmax(0, 1fr) auto; }
+  .adm-kids { margin-left: 12px; }
+  .adm-pane { padding: 22px 16px 44px; }
+  .adm-ev { grid-template-columns: 56px minmax(0, 1fr) auto; column-gap: 10px; }
+  .adm-turn { grid-template-columns: minmax(0, 1fr); row-gap: 1px; }
+  .adm-turn .who { padding-top: 0; }
+}
