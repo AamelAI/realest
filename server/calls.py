@@ -102,6 +102,23 @@ def destination(session_id: str, listing) -> str:
     return phones[0] if phones else ""
 
 
+def ensure_listing_dest(session_id: str, listing_id: str) -> str:
+    """Number to text for this listing. Prefer the number we actually rang."""
+    if listing_id and (session_id, listing_id) in _listing_dest:
+        return _listing_dest[(session_id, listing_id)]
+    if session_id in _session_dest:
+        return _session_dest[session_id]
+    s = store.get(session_id)
+    ids = [st.listing_id for st in (s.listings if s else [])]
+    if listing_id and listing_id not in ids:
+        ids.append(listing_id)
+    if ids:
+        assign_demo_targets(session_id, ids)
+        if listing_id and (session_id, listing_id) in _listing_dest:
+            return _listing_dest[(session_id, listing_id)]
+    return destination(session_id, L.by_id(listing_id))
+
+
 def assign_demo_targets(session_id: str, listing_ids: list[str]) -> list[str]:
     """Zip shortlist onto DEMO_AGENT_PHONE. Stop when the phone list ends."""
     phones = demo_phones()
@@ -644,9 +661,9 @@ def _sms_remember(to: str, body: str) -> None:
 
 async def sms_landlord(session_id: str, listing_id: str, body: str) -> bool:
     """Text the listing-agent / landlord number for this listing. Never the renter."""
-    dest = destination(session_id, L.by_id(listing_id))
+    dest = ensure_listing_dest(session_id, listing_id)
     if not dest:
-        log.info("sms_landlord[%s/%s]: no dest — skip", session_id, listing_id)
+        log.warning("sms_landlord[%s/%s]: no dest — skip", session_id, listing_id)
         return False
     return await sms(session_id, body, to=dest)
 

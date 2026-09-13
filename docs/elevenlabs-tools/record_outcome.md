@@ -11,7 +11,7 @@ Listing agent only. Paste these into **Add webhook tool**.
 ## Description
 
 ```
-Call this at the end of the call with everything the listing agent actually said. Only fill a field if they said it. Never guess. After it returns, you can hang up.
+Call this at the end of the call with everything the listing agent actually said. Only fill a field if they said it. Never guess. After it returns, say only: "Goodbye, we will be in touch." Then hang up.
 ```
 
 ## Body

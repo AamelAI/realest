@@ -565,7 +565,7 @@ async def agent_outcome(payload: dict):
     asyncio.create_task(calls.notify_renter(sid, lid))
     monitor.record(sid, "listing", "outcome", "ok",
                    summary=lid, listing_id=lid)
-    return {"speak": "Got it, thanks.", "session_id": sid, "agent_says": s.agent_says}
+    return {"speak": "Goodbye, we will be in touch.", "session_id": sid, "agent_says": s.agent_says}
 
 
 def _book_decision(payload: dict) -> str:
@@ -583,7 +583,18 @@ async def agent_book(payload: dict):
     tells the landlord the renter is passing; it does not book.
     """
     sid = _ensure_session(payload)
+    _bind_renter_conv(sid, payload)
+    phone = _apply_caller(payload)
+    if phone:
+        await store.mutate(sid, lambda s: setattr(s, "caller_phone", phone) if not s.caller_phone else None)
+
     lid = _resolve_listing_id(payload, sid)
+    if not lid:
+        s = store.get(sid)
+        cards = list(s.listings) if s else []
+        picked = next((st for st in cards if st.status is CallStatus.VERIFIED), None)
+        lid = (picked or (cards[0] if cards else None))
+        lid = lid.listing_id if lid else ""
     slot = _as_text(payload.get("slot"))
     decision = _book_decision(payload)
     lst = L.by_id(lid)
@@ -611,9 +622,10 @@ async def agent_book(payload: dict):
                        summary=f"reject {lid}", listing_id=lid,
                        conversation_id=calls.renter_conversation(sid))
         return {"speak": spoken, "session_id": sid, "decision": "reject",
-                "landlord_sms": landlord}
+                "landlord_sms": landlord, "renter_sms": False}
 
-    spoken = f"Booked - {where}, {slot}. Confirmation is on its way by text."
+    when = slot or "the agreed time"
+    spoken = f"Booked - {where}, {when}. Confirmation is on its way by text."
 
     def write(s):
         for st in s.listings:
@@ -624,14 +636,17 @@ async def agent_book(payload: dict):
         s.agent_says = spoken
 
     await store.mutate(sid, write)
-    await calls.sms(sid, f"Confirmed: {where}, {slot}. {WEB_URL}/s/{sid}")
-    landlord = await calls.sms_landlord(
-        sid, lid, f"Confirmed viewing: {where}, {slot}. The renter is coming.")
+    renter_body = f"Confirmed: {where}, {when}. {WEB_URL}/s/{sid}"
+    landlord_body = f"Confirmed viewing: {where}, {when}. The renter is coming."
+    renter_sms = await calls.sms(sid, renter_body, to=phone or None)
+    landlord = await calls.sms_landlord(sid, lid, landlord_body)
+    log.info("book[%s]: %s confirm renter_sms=%s landlord_sms=%s",
+             sid, lid, renter_sms, landlord)
     monitor.record(sid, "renter", "book", "ok",
                    summary=f"confirm {lid}", listing_id=lid,
                    conversation_id=calls.renter_conversation(sid))
     return {"speak": spoken, "session_id": sid, "decision": "confirm",
-            "landlord_sms": landlord}
+            "landlord_sms": landlord, "renter_sms": renter_sms}
 
 
 @app.post("/agent/sms")

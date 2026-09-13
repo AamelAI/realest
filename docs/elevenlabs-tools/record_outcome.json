@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "record_outcome",
-  "description": "Call this at the end of the call with everything the listing agent actually said. Only fill a field if they said it. Never guess. After it returns, you can hang up.",
+  "description": "Call this at the end of the call with everything the listing agent actually said. Only fill a field if they said it. Never guess. After it returns, say only: Goodbye, we will be in touch. Then hang up.",
   "api_schema": {
     "url": "https://zipping-scarf-actress.ngrok-free.dev/agent/outcome",
     "method": "POST",

@@ -78,7 +78,7 @@
         {
             "type": "webhook",
             "name": "book_viewing",
-            "description": "Call this when the caller confirms or rejects a viewing on a specific listing. decision is confirm or reject. That texts the listing agent a confirmation or a rejection. After it returns, read the speak field aloud.",
+            "description": "Call this the moment the caller books or passes. This tool texts the confirmation to the renter and the listing agent (or a rejection). Always call it — never only say it is booked. After it returns, read the speak field aloud.",
             "api_schema": {
                 "url": "{PUBLIC_URL}/agent/book",
                 "method": "POST",
@@ -89,6 +89,11 @@
                             "type": "string",
                             "description": "Dynamic variable {{session_id}}. Do not invent this.",
                             "dynamic_variable": "session_id"
+                        },
+                        "caller_phone": {
+                            "type": "string",
+                            "description": "Inbound caller from system__caller_id. Do not invent it.",
+                            "dynamic_variable": "system__caller_id"
                         },
                         "listing_id": { "type": "string", "description": "Listing to book or pass on." },
                         "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." },
@@ -128,7 +133,7 @@
         {
             "type": "webhook",
             "name": "record_outcome",
-            "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess: the entire product rests on these facts having come from a human.",
+            "description": "LISTING-AGENT SIDE ONLY. Call this at the end of the call with everything the listing agent told you. Only fill a field if they actually said it - omit it otherwise. Never guess. After it returns, say only: Goodbye, we will be in touch. Then hang up.",
             "api_schema": {
                 "url": "{PUBLIC_URL}/agent/outcome",
                 "method": "POST",
