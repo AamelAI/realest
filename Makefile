@@ -1,4 +1,4 @@
-.PHONY: pull reload dev tunnel web seed check listings preview bridge spike eleven-spike eleven-tools tools install doctor help
+.PHONY: pull reload dev tunnel web seed check listings preview bridge spike eleven-spike eleven-tools calls tools install doctor help
 
 help:
 	@grep -E '^[a-z]+:' Makefile | grep -v '^\.PHONY' | sed 's/:.*//' | sed 's/^/  make /'
@@ -55,6 +55,9 @@ eleven-spike:       ## ElevenLabs outbound: make eleven-spike TO=+14165551234 [R
 
 eleven-tools:       ## print webhook tools with PUBLIC_URL filled in
 	uv run python scripts/elevenlabs_tools.py
+
+calls:              ## browse ElevenLabs call logs (list, then pick one)
+	@bash scripts/call_logs.sh $(ID)
 
 preview:            ## QA page: every listing + link to the real rentals.ca page
 	uv run python scripts/preview.py && open data/preview.html
