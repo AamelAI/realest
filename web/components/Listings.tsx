@@ -23,12 +23,15 @@ export function Listings({
   selecting,
   selected,
   onToggle,
+  starting = [],
 }: {
   cards: Card[];
   /** the prompt is open, so checkboxes show */
   selecting: boolean;
   selected: string[];
   onToggle: (id: string) => void;
+  /** tapped to call, not yet reflected by the server */
+  starting?: string[];
 }) {
   const rank = new Map(cards.map((c, i) => [c.listing_id, i]));
 
@@ -50,6 +53,7 @@ export function Listings({
           selecting={selecting && isSelectable(card.status)}
           selected={selected.includes(card.listing_id)}
           onToggle={onToggle}
+          starting={starting.includes(card.listing_id)}
         />
       ))}
     </div>
@@ -57,12 +61,12 @@ export function Listings({
 }
 
 function Row({
-  card, rank, selecting, selected, onToggle,
+  card, rank, selecting, selected, onToggle, starting,
 }: {
   card: Card; rank: number; selecting: boolean; selected: boolean;
-  onToggle: (id: string) => void;
+  onToggle: (id: string) => void; starting: boolean;
 }) {
-  const s = statusOf(card);
+  const s = statusOf(card, starting);
   const note = noteOf(card);
   const rent = rentOf(card);
 

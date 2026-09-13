@@ -21,10 +21,13 @@ const answered = (c: Card) =>
 export function CallsPanel({
   cards,
   elapsed,
+  stale = false,
 }: {
   /** every listing we placed a call to this session, in call order */
   cards: Card[];
   elapsed: Record<string, number>;
+  /** the connection is down — stop claiming the calls are visibly live */
+  stale?: boolean;
 }) {
   if (!cards.length) return null;
 
@@ -38,7 +41,7 @@ export function CallsPanel({
       aria-label="Calls to listing agents"
     >
       <div className="flex items-center gap-[7px] px-[14px] py-3" style={{ background: "var(--color-ink)" }}>
-        {live > 0 && (
+        {live > 0 && !stale && (
           <span
             aria-hidden
             className="r-pulse-fast inline-block h-[6px] w-[6px] rounded-full"

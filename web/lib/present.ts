@@ -31,8 +31,17 @@ const DEAD = "var(--color-dead)", DEAD_BG = "var(--color-dead-bg)";
 const NONE = "var(--color-none)", NONE_BG = "var(--color-none-bg)";
 const ACCENT = "var(--color-accent)";
 
-export function statusOf(card: Card): Status {
+export function statusOf(card: Card, starting = false): Status {
   const o = card.outcome;
+  // The renter tapped call and the server hasn't reflected it yet. This states
+  // what the renter did, not what the phone network is doing — so it is
+  // "Starting call", never an invented "Dialing" or "Ringing".
+  if (starting && isSelectable(card.status)) {
+    return {
+      label: "Starting", short: "Starting call…",
+      fg: ACCENT, bg: "var(--color-tint)", dot: ACCENT, dead: false, proven: false,
+    };
+  }
   switch (card.status) {
     case "booked":
       return {
