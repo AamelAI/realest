@@ -3,313 +3,760 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Realest — admin</title>
+  <title>Realest — call monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600;700&display=swap" />
+  <!-- FastAPI serves this when the Next.js admin UI is down. Same markup,
+       same behaviour, and the stylesheet below is web/app/admin/admin.css
+       verbatim (tests/test_admin_static.py fails if the two drift). -->
+  <style>body { margin: 0; }</style>
   <style>
-    :root {
-      --ink: #14161a;
-      --muted: #5c6470;
-      --faint: #8b93a1;
-      --dim: #c7ccd4;
-      --tint: #f5f4ff;
-      --warm: #fafaf8;
-      --surface: #ffffff;
-      --real: #0b6b4f;
-      --warn: #b45309;
-      --dead: #b42318;
-      --hair-row: rgba(20, 22, 26, 0.07);
-      --hair-head: rgba(20, 22, 26, 0.08);
-      --hair-panel: rgba(20, 22, 26, 0.1);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--surface);
-      color: var(--ink);
-      font-family: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
-      -webkit-font-smoothing: antialiased;
-    }
-    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
-    .tnum { font-variant-numeric: tabular-nums; }
-    header {
-      border-bottom: 1px solid var(--hair-head);
-      padding: 16px 24px;
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 24px;
-    }
-    .brand { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
-    .sub { margin-top: 2px; font-size: 12px; color: var(--muted); }
-    nav { display: flex; gap: 24px; font-size: 13px; }
-    nav button {
-      background: none; border: 0; padding: 0; cursor: pointer;
-      color: var(--muted); font: inherit;
-    }
-    nav button.on { color: var(--ink); font-weight: 600; }
-    .grid {
-      display: grid;
-      min-height: calc(100svh - 65px);
-      grid-template-columns: minmax(0, 1fr) minmax(320px, 42%);
-    }
-    @media (max-width: 900px) {
-      .grid { grid-template-columns: 1fr; }
-      aside { border-left: 0 !important; border-top: 1px solid var(--hair-panel); }
-    }
-    section { padding: 20px 24px; min-width: 0; }
-    aside {
-      min-width: 0;
-      border-left: 1px solid var(--hair-panel);
-      background: var(--warm);
-      padding: 20px 24px;
-    }
-    h1 { margin: 0; font-size: 15px; font-weight: 600; }
-    .row-head {
-      display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
-    }
-    .empty { margin-top: 32px; font-size: 13px; color: var(--muted); }
-    .err { margin-top: 12px; font-size: 13px; color: var(--dead); }
-    ol { list-style: none; margin: 16px 0 0; padding: 0; border-top: 1px solid var(--hair-row); }
-    .call {
-      width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--hair-row);
-      background: transparent; padding: 12px 0; cursor: pointer; font: inherit; color: inherit;
-    }
-    .call.sel { background: var(--tint); }
-    .call-top { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
-    .call-title { font-size: 14px; font-weight: 500; }
-    .meta { margin-top: 2px; font-size: 11px; color: var(--faint); }
-    .rail { margin-top: 4px; font-size: 11px; display: flex; flex-wrap: wrap; gap: 2px 8px; }
-    .rail .on { color: var(--ink); }
-    .rail .hit { color: var(--muted); }
-    .rail .off { color: var(--dim); }
-    .st-warn { color: var(--warn); }
-    .st-real { color: var(--real); }
-    .st-dead { color: var(--dead); }
-    .st-muted { color: var(--muted); }
-    .linkish {
-      background: none; border: 0; padding: 0; cursor: pointer;
-      font: inherit; color: var(--muted); text-decoration: underline; text-underline-offset: 2px;
-    }
-    aside h2 { margin: 0; font-size: 13px; font-weight: 600; }
-    aside h3 { margin: 24px 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
-    .ev { border-bottom: 1px solid var(--hair-row); padding: 10px 0; }
-    .ev:first-of-type { border-top: 1px solid var(--hair-row); margin-top: 20px; }
-    pre {
-      margin: 4px 0 0; white-space: pre-wrap; font-size: 11px; color: var(--muted);
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-    }
-    .turn { border-bottom: 1px solid var(--hair-row); padding: 8px 0; }
-    .turn .role { font-size: 11px; color: var(--faint); }
-    .turn p { margin: 2px 0 0; font-size: 13px; line-height: 1.35; }
+/* BEGIN admin.css */
+/* ─────────────────────────────────────────────────────────────────────────
+   Realest admin monitor.
+
+   Shared by the Next.js page (web/app/admin) and the FastAPI fallback
+   (server/static/admin.html, which embeds a copy of this file). Change one,
+   change the other.
+
+   A switchboard log, not a dashboard: every renter session is a line, the
+   listing calls it fanned out hang beneath it, and the pane on the right is
+   the tape. Hairline rules instead of boxes, square corners, no shadows.
+   Machine data (times, ids, tool names) is mono with tabular figures; status
+   is a coloured word. Ink, paper and three status colours, nothing else.
+   See .claude/skills/live-surface/design-rules.md.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.adm {
+  --adm-ink: #14161a;
+  --adm-ink-2: #3d434c;
+  --adm-muted: #5c6470;
+  --adm-faint: #8b93a1;
+  --adm-dim: #c9cdd4;
+  --adm-rule: rgba(20, 22, 26, 0.08);
+  --adm-rule-strong: rgba(20, 22, 26, 0.14);
+  --adm-paper: #ffffff;
+  --adm-warm: #fafaf8;
+  --adm-hover: #f6f5f2;
+  --adm-select: #eeede8;
+  --adm-good: #0b6b4f;
+  --adm-warn: #b45309;
+  --adm-bad: #b42318;
+  --adm-sans: var(--font-instrument, "Instrument Sans"), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --adm-mono: var(--font-plex, "IBM Plex Mono"), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --adm-head: 56px;
+
+  min-height: 100svh;
+  background: var(--adm-paper);
+  color: var(--adm-ink);
+  font: 14px/1.45 var(--adm-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A local reset, so the Next page (Tailwind preflight) and the static
+   fallback (no reset at all) render the same. :where() keeps it at zero
+   specificity, so every component rule below wins without a fight. */
+:where(.adm) *,
+:where(.adm) *::before,
+:where(.adm) *::after { box-sizing: border-box; }
+:where(.adm) button {
+  font: inherit; color: inherit; background: none; border: 0; border-radius: 0;
+  padding: 0; margin: 0; cursor: pointer; text-align: inherit;
+}
+:where(.adm) :is(ol, ul) { list-style: none; margin: 0; padding: 0; }
+:where(.adm) :is(h1, h2, h3, p, pre, dl, dd) { margin: 0; }
+:where(.adm) :is(h1, h2, h3) { font-size: inherit; font-weight: inherit; }
+:where(.adm) :focus-visible { outline: 2px solid var(--adm-ink); outline-offset: -2px; }
+
+.adm .mono { font-family: var(--adm-mono); }
+.adm .num { font-family: var(--adm-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* status: a coloured word, never a chip */
+.adm .t-good { color: var(--adm-good); }
+.adm .t-bad { color: var(--adm-bad); }
+.adm .t-warn,
+.adm .t-live { color: var(--adm-warn); }
+.adm .t-quiet { color: var(--adm-muted); }
+
+/* the one piece of motion: a square that breathes while a call is live */
+.adm-dot { display: inline-block; flex: none; width: 6px; height: 6px; background: currentColor; }
+.adm-dot.is-live { animation: adm-breathe 1.4s ease-in-out infinite; }
+@keyframes adm-breathe { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .adm-dot.is-live { animation: none; } }
+
+/* ── header ───────────────────────────────────────────────────────────── */
+
+.adm-top {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: stretch; gap: 36px;
+  height: var(--adm-head); padding: 0 24px;
+  background: var(--adm-paper);
+  border-bottom: 1px solid var(--adm-rule-strong);
+}
+.adm-brand { display: flex; align-items: baseline; gap: 10px; align-self: center; white-space: nowrap; }
+.adm-brand b { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
+.adm-brand span { font-size: 13px; color: var(--adm-muted); }
+
+.adm-tabs { display: flex; gap: 26px; }
+.adm-tab { position: relative; display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--adm-muted); }
+.adm-tab:hover { color: var(--adm-ink); }
+.adm-tab[aria-selected="true"] { color: var(--adm-ink); font-weight: 600; }
+.adm-tab[aria-selected="true"]::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--adm-ink);
+}
+.adm-tab .num { font-size: 11px; font-weight: 400; color: var(--adm-faint); }
+
+.adm-health { margin-left: auto; display: flex; align-items: center; gap: 8px; align-self: center; font-size: 12px; color: var(--adm-muted); white-space: nowrap; }
+.adm-health .num { font-size: 11.5px; }
+
+/* ── figures: the whole switchboard in one line ──────────────────────── */
+
+.adm-figures {
+  display: flex; flex-wrap: wrap; gap: 6px 30px;
+  padding: 13px 24px; border-bottom: 1px solid var(--adm-rule);
+  font-size: 12.5px; color: var(--adm-muted);
+}
+.adm-figures .num { margin-right: 6px; font-size: 13px; font-weight: 500; color: var(--adm-ink); }
+.adm-figures .num.t-good { color: var(--adm-good); }
+.adm-figures .num.t-bad { color: var(--adm-bad); }
+.adm-figures .num.t-warn,
+.adm-figures .num.t-live { color: var(--adm-warn); }
+
+/* ── layout: the log on the left, the tape on the right ──────────────── */
+
+.adm-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(400px, 42%); align-items: start; }
+.adm-list { min-width: 0; padding: 22px 24px 56px; }
+.adm-pane {
+  position: sticky; top: var(--adm-head);
+  min-width: 0; height: calc(100svh - var(--adm-head)); overflow-y: auto;
+  padding: 24px 28px 56px;
+  background: var(--adm-warm);
+  border-left: 1px solid var(--adm-rule-strong);
+}
+
+.adm-listhead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+.adm-listhead h1 { font-size: 13px; font-weight: 600; }
+.adm-listhead .aside { display: flex; align-items: baseline; gap: 14px; font-size: 12px; color: var(--adm-faint); }
+.adm-link {
+  font-size: 12px; color: var(--adm-ink-2);
+  text-decoration: underline; text-decoration-color: var(--adm-dim); text-underline-offset: 3px;
+}
+.adm-link:hover { text-decoration-color: currentColor; }
+.adm-link:disabled { color: var(--adm-faint); cursor: default; text-decoration: none; }
+.adm-error { margin: 0 0 12px; font-size: 12.5px; color: var(--adm-bad); }
+
+/* ── rows ─────────────────────────────────────────────────────────────── */
+
+.adm-rows { border-top: 1px solid var(--adm-rule-strong); }
+.adm-group { border-bottom: 1px solid var(--adm-rule); }
+.adm-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 20px;
+  grid-template-areas: "main end" "rail end";
+  width: 100%; padding: 13px 12px;
+}
+.adm-row:hover { background: var(--adm-hover); }
+.adm-row[aria-current="true"] { background: var(--adm-select); }
+.adm-row-main { grid-area: main; display: block; min-width: 0; }
+.adm-row-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; letter-spacing: -0.005em; }
+.adm-row-title .mono { margin-left: 2px; font-size: 12.5px; font-weight: 400; color: var(--adm-muted); }
+.adm-row-title .soft { font-weight: 400; color: var(--adm-muted); }
+.adm-row-meta { display: block; margin-top: 2px; font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-faint); }
+.adm-row-end { grid-area: end; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; }
+.adm-state { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.adm-when { font-size: 11px; color: var(--adm-faint); white-space: nowrap; }
+
+/* listing calls hang off their session like branches */
+.adm-kids { margin: -4px 0 8px 12px; }
+.adm-kid { position: relative; padding-left: 20px; }
+.adm-kid::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: var(--adm-dim); }
+.adm-kid:last-child::before { bottom: 50%; }
+.adm-kid::after { content: ""; position: absolute; left: 0; top: 50%; width: 13px; height: 1px; background: var(--adm-dim); }
+.adm-kid .adm-row { padding-top: 8px; padding-bottom: 8px; }
+.adm-kid .adm-row-title { font-size: 13.5px; font-weight: 500; }
+
+/* where the renter call has got to, as a line of tool names */
+.adm-rail { grid-area: rail; display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; margin-top: 8px; font-family: var(--adm-mono); font-size: 11px; color: var(--adm-dim); }
+.adm-rail > span { display: inline-flex; align-items: center; }
+.adm-rail > span + span::before { content: "·"; margin: 0 7px; color: var(--adm-dim); font-weight: 400; }
+.adm-rail > .is-done { color: var(--adm-ink-2); }
+.adm-rail > .is-now { color: var(--adm-ink); font-weight: 500; }
+.adm-rail > .is-now.t-live { color: var(--adm-warn); }
+
+/* history rows carry a date column */
+.adm-row.is-hist { grid-template-columns: 76px minmax(0, 1fr) auto; grid-template-areas: "date main end"; }
+.adm-date { grid-area: date; font-family: var(--adm-mono); font-size: 11.5px; line-height: 1.5; color: var(--adm-faint); font-variant-numeric: tabular-nums; }
+.adm-date b { display: block; font-weight: 400; color: var(--adm-ink-2); }
+
+.adm-empty { padding: 40px 0; max-width: 46ch; font-size: 13px; color: var(--adm-muted); }
+.adm-empty b { display: block; margin-bottom: 4px; font-weight: 600; color: var(--adm-ink); }
+
+/* ── the tape ─────────────────────────────────────────────────────────── */
+
+.adm-pane-head { padding-bottom: 18px; border-bottom: 1px solid var(--adm-rule-strong); }
+.adm-pane-head .kicker { display: flex; justify-content: space-between; gap: 16px; font-size: 12px; color: var(--adm-muted); }
+.adm-pane-head h2 { margin-top: 3px; font-size: 19px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; }
+.adm-ids { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 16px; margin-top: 12px; font-size: 12px; }
+.adm-ids dt { color: var(--adm-faint); }
+.adm-ids dd { min-width: 0; font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-ink-2); }
+.adm-copy { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-ink-2); }
+.adm-copy .note { margin-left: 8px; color: var(--adm-faint); opacity: 0; }
+.adm-copy:hover .note,
+.adm-copy:focus-visible .note,
+.adm-copy.is-done .note { opacity: 1; }
+
+.adm-section { margin-top: 28px; }
+.adm-section > h3 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; font-weight: 600; }
+.adm-section > h3 .num { font-size: 11px; font-weight: 400; color: var(--adm-faint); }
+.adm-section > p { margin-top: 8px; font-size: 13px; color: var(--adm-muted); }
+
+.adm-log { margin-top: 8px; border-top: 1px solid var(--adm-rule); }
+.adm-ev {
+  display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; column-gap: 14px; align-items: baseline;
+  padding: 8px 0; border-bottom: 1px solid var(--adm-rule);
+}
+.adm-ev time { font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-faint); font-variant-numeric: tabular-nums; }
+.adm-ev .tool { font-family: var(--adm-mono); font-size: 12px; }
+.adm-ev .note { display: block; margin-top: 1px; font-size: 12px; color: var(--adm-muted); overflow-wrap: anywhere; }
+.adm-ev .adm-state { font-family: var(--adm-mono); font-size: 11.5px; font-weight: 400; }
+
+.adm-calls { margin-top: 8px; border-top: 1px solid var(--adm-rule); }
+.adm-calls li { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--adm-rule); font-size: 13px; }
+.adm-calls .mono { margin-left: 8px; font-size: 11.5px; color: var(--adm-faint); }
+
+.adm-toolcall { padding: 10px 0; border-bottom: 1px solid var(--adm-rule); }
+.adm-toolcall-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.adm-toolcall-head .tool { font-family: var(--adm-mono); font-size: 12px; }
+.adm-kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 14px; margin-top: 6px; font-family: var(--adm-mono); font-size: 11.5px; }
+.adm-kv dt { color: var(--adm-faint); }
+.adm-kv dd { min-width: 0; color: var(--adm-ink-2); overflow-wrap: anywhere; }
+.adm-said { margin-top: 7px; font-size: 13px; color: var(--adm-ink-2); }
+.adm-said::before { content: "said  "; font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-faint); }
+.adm-raw { margin-top: 6px; white-space: pre-wrap; font-family: var(--adm-mono); font-size: 11.5px; color: var(--adm-muted); overflow-wrap: anywhere; }
+
+.adm-turns { margin-top: 10px; }
+.adm-turn { display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 14px; padding: 6px 0; }
+.adm-turn .who { padding-top: 2px; font-size: 11.5px; color: var(--adm-faint); }
+.adm-turn.is-us .who { color: var(--adm-ink); font-weight: 500; }
+.adm-turn p { max-width: 64ch; font-size: 13.5px; line-height: 1.5; color: var(--adm-ink-2); }
+.adm-turn.is-us p { color: var(--adm-ink); }
+
+/* ── narrow screens: one column, the tape below the log ──────────────── */
+
+@media (max-width: 1023px) {
+  .adm-body { grid-template-columns: minmax(0, 1fr); }
+  .adm-pane { position: static; height: auto; overflow: visible; border-left: 0; border-top: 1px solid var(--adm-rule-strong); }
+}
+
+@media (max-width: 639px) {
+  .adm-top { flex-wrap: wrap; height: auto; gap: 2px 16px; padding: 12px 16px 0; }
+  .adm-tabs { order: 3; width: 100%; }
+  .adm-tab { padding: 10px 0 11px; }
+  .adm-figures { gap: 4px 20px; padding: 12px 16px; }
+  .adm-list { padding: 18px 16px 36px; }
+  .adm-row { grid-template-areas: "main end" "rail rail"; padding-left: 8px; padding-right: 8px; column-gap: 12px; }
+  .adm-row:not(.is-hist) .adm-when { display: none; }
+  .adm-rail > span + span::before { margin: 0 5px; }
+  .adm-row.is-hist { grid-template-columns: 58px minmax(0, 1fr) auto; }
+  .adm-kids { margin-left: 12px; }
+  .adm-pane { padding: 22px 16px 44px; }
+  .adm-ev { grid-template-columns: 56px minmax(0, 1fr) auto; column-gap: 10px; }
+  .adm-turn { grid-template-columns: minmax(0, 1fr); row-gap: 1px; }
+  .adm-turn .who { padding-top: 0; }
+}
+/* END admin.css */
   </style>
 </head>
 <body>
-  <header>
-    <div>
-      <div class="brand">Realest</div>
-      <div class="sub">Admin monitor</div>
-    </div>
-    <nav>
-      <button type="button" id="tab-live" class="on">Live</button>
-      <button type="button" id="tab-hist">History</button>
-    </nav>
-  </header>
-  <div class="grid">
-    <section id="list"></section>
-    <aside id="pane"></aside>
-  </div>
+  <div class="adm" id="app"></div>
   <script>
+  (() => {
     const RAIL = ["init", "preferences", "start_calls", "outcome", "book"];
-    let tab = "live";
-    let live = [];
-    let history = [];
-    let histError = "";
-    let selectedLive = "";
-    let selectedHist = "";
-    let detail = null;
-    let loadingHist = false;
-    let prev = "";
+    const POLL_MS = 1200;
+    const STALE_MS = 4000;
 
-    function esc(s) {
-      return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-      }[c]));
+    const LISTING = {
+      pending: { label: "Queued", tone: "quiet" },
+      calling: { label: "On the call", tone: "live" },
+      verified: { label: "Verified", tone: "good" },
+      booked: { label: "Booked", tone: "good" },
+      dead: { label: "Leased", tone: "bad" },
+      no_answer: { label: "No answer", tone: "warn" },
+    };
+    const CONVERSATION = {
+      initiated: { label: "Ringing", tone: "live" },
+      "in-progress": { label: "On the line", tone: "live" },
+      processing: { label: "Processing", tone: "quiet" },
+      done: { label: "Completed", tone: "quiet" },
+      failed: { label: "Failed", tone: "bad" },
+    };
+    const SETTLED = new Set(["verified", "booked", "dead", "no_answer"]);
+
+    const S = {
+      tab: "live", live: [], history: [], histError: "", histLoadedAt: 0, loadingHist: false,
+      selLive: "", selHist: "", detail: null, detailError: "", lastOk: 0, failing: false, prev: "",
+    };
+    const app = document.getElementById("app");
+
+    /* ── words for states ─────────────────────────────────────────────── */
+
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    function liveStatus(c) {
+      if (c.status === "in_flight") return { label: "Waiting on calls", tone: "live" };
+      if (c.role === "listing" && LISTING[c.status]) return LISTING[c.status];
+      if (c.el_status && CONVERSATION[c.el_status]) return CONVERSATION[c.el_status];
+      return { label: "Open", tone: "quiet" };
     }
-    function statusClass(status) {
+    const conversationStatus = (s) => CONVERSATION[s] || { label: s || "Unknown", tone: "quiet" };
+    function eventTone(status) {
       const s = String(status || "").toLowerCase();
-      if (["in_flight", "calling", "in-progress", "initiated"].includes(s)) return "st-warn";
-      if (["booked", "verified", "done", "ok"].includes(s)) return "st-real";
-      if (["dead", "failed", "error"].includes(s)) return "st-dead";
-      return "st-muted";
+      if (s === "started") return "live";
+      if (s === "ok" || s === "done") return "good";
+      if (s === "failed" || s === "error") return "bad";
+      return "quiet";
     }
-    function when(unix) {
-      if (!unix) return "—";
+    const roleName = (role) => (role === "listing" ? "Listing agent" : "Renter");
+
+    /* ── time ─────────────────────────────────────────────────────────── */
+
+    const pad = (n) => String(n).padStart(2, "0");
+    function clock(unix) {
+      if (!unix) return "–";
       const d = new Date(unix * 1000);
-      return [d.getHours(), d.getMinutes(), d.getSeconds()]
-        .map((n) => String(n).padStart(2, "0")).join(":");
+      return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
-    function toolRail(tools, current) {
-      const hit = new Set(tools || []);
-      return `<div class="rail mono">${RAIL.map((step, i) => {
-        const cls = current === step ? "on" : hit.has(step) ? "hit" : "off";
-        return `${i ? `<span class="off">—</span>` : ""}<span class="${cls}">${step}</span>`;
-      }).join(" ")}</div>`;
+    const day = (unix) => (unix
+      ? new Date(unix * 1000).toLocaleDateString("en-CA", { month: "short", day: "numeric" }) : "");
+    function ago(unix) {
+      if (!unix) return "";
+      const s = Math.max(0, Math.round(Date.now() / 1000 - unix));
+      if (s < 60) return `${s}s ago`;
+      if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+      if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+      return `${Math.floor(s / 86400)}d ago`;
     }
+    const agoSpan = (unix) => (unix ? `<span data-ago="${unix}">${ago(unix)}</span>` : "");
+    const length = (secs) => (secs == null ? "" : `${Math.floor(secs / 60)}:${pad(Math.round(secs % 60))}`);
+
+    /* ── shaping the payloads ─────────────────────────────────────────── */
+
+    const lastT = (c) => (c.events && c.events.length ? c.events[c.events.length - 1].t : 0);
+
+    function groupSessions(calls) {
+      const bySid = new Map();
+      for (const c of calls) {
+        const g = bySid.get(c.session_id) || { sid: c.session_id, head: null, kids: [], last: 0 };
+        bySid.set(c.session_id, g);
+        if (c.role !== "listing" && !g.head) g.head = c;
+        else g.kids.push(c);
+        g.last = Math.max(g.last, lastT(c));
+      }
+      const groups = [...bySid.values()];
+      for (const g of groups) g.kids.sort((a, b) => String(a.listing_id).localeCompare(String(b.listing_id)));
+      return groups.sort((a, b) => b.last - a.last);
+    }
+    function reached(head, kids) {
+      const hit = new Set(head.tools || []);
+      if (kids.some((k) => (k.tools || []).includes("outcome") || SETTLED.has(k.status))) hit.add("outcome");
+      return hit;
+    }
+    function parseTranscript(text) {
+      const out = [];
+      for (const line of String(text || "").split("\n")) {
+        const m = /^([a-z_]+):\s?(.*)$/i.exec(line);
+        if (m) out.push({ role: m[1].toLowerCase(), text: m[2] });
+        else if (line.trim() && out.length) out[out.length - 1].text += ` ${line.trim()}`;
+        else if (line.trim()) out.push({ role: "", text: line.trim() });
+      }
+      return out;
+    }
+    function speaker(role, callRole) {
+      if (role === "agent" || role === "ai") return { who: "Realest", us: true };
+      if (role === "user") return { who: callRole === "listing" ? "Leasing agent" : "Renter", us: false };
+      return { who: role ? role[0].toUpperCase() + role.slice(1) : "", us: false };
+    }
+    function show(v) {
+      if (Array.isArray(v)) return v.length ? v.map(show).join(", ") : "none";
+      if (v && typeof v === "object") return JSON.stringify(v);
+      return String(v);
+    }
+    function fields(raw) {
+      try {
+        const v = JSON.parse(raw);
+        if (v && typeof v === "object" && !Array.isArray(v)) return Object.entries(v).map(([k, x]) => [k, show(x)]);
+      } catch (_) { /* not JSON */ }
+      return null;
+    }
+    function result(raw) {
+      const f = raw ? fields(raw) : null;
+      if (!f) return { said: "", rest: [], text: raw || "" };
+      const said = (f.find(([k]) => k === "speak") || [])[1] || "";
+      return { said, rest: f.filter(([k]) => k !== "speak"), text: "" };
+    }
+
+    /* ── small pieces ─────────────────────────────────────────────────── */
+
+    const state = (st, mono) => `<span class="adm-state t-${st.tone}${mono ? " mono" : ""}">${
+      st.tone === "live" ? '<span class="adm-dot" aria-hidden="true"></span>' : ""}${esc(st.label)}</span>`;
+    const copy = (text) => (text
+      ? `<button type="button" class="adm-copy" data-copy="${esc(text)}">${esc(text)}<span class="note">copy</span></button>`
+      : "–");
+    function rail(hit, now, live) {
+      return `<span class="adm-rail" aria-label="Tools reached: ${esc([...hit].join(", ") || "none")}">${RAIL.map((step) => {
+        const cls = [hit.has(step) ? "is-done" : "", step === now ? `is-now${live ? " t-live" : ""}` : ""]
+          .filter(Boolean).join(" ");
+        return `<span${cls ? ` class="${cls}"` : ""}>${step}</span>`;
+      }).join("")}</span>`;
+    }
+    function timeline(events) {
+      const started = new Map();
+      return `<ol class="adm-log">${events.map((ev) => {
+        let took = "";
+        if (ev.status === "started") started.set(ev.tool, ev.t);
+        else if (ev.status === "done" && started.has(ev.tool)) {
+          took = `after ${Math.round(ev.t - started.get(ev.tool))}s`;
+          started.delete(ev.tool);
+        }
+        const note = [String(ev.summary || "").replaceAll(",", ", "), took].filter(Boolean).join(" · ");
+        return `<li class="adm-ev"><time>${clock(ev.t)}</time><span><span class="tool">${esc(ev.tool)}</span>${
+          note ? `<span class="note">${esc(note)}</span>` : ""}</span><span class="adm-state t-${eventTone(ev.status)}">${esc(ev.status)}</span></li>`;
+      }).join("")}</ol>`;
+    }
+    const turns = (list, callRole) => `<ol class="adm-turns">${list.map((t) => {
+      const s = speaker(t.role, callRole);
+      return `<li class="adm-turn${s.us ? " is-us" : ""}"><span class="who">${esc(s.who)}</span><p>${esc(t.text)}</p></li>`;
+    }).join("")}</ol>`;
+    const kv = (rows) => `<dl class="adm-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`;
+    function toolCall(tool) {
+      const params = fields(tool.params);
+      const out = result(tool.result);
+      const paramsHtml = params && params.length ? kv(params)
+        : tool.params && tool.params !== "{}" && !params ? `<pre class="adm-raw">${esc(tool.params)}</pre>` : "";
+      return `<li class="adm-toolcall"><div class="adm-toolcall-head"><span class="tool">${esc(tool.name)}</span>${
+        state({ label: tool.error ? "error" : "ok", tone: tool.error ? "bad" : "good" }, true)}</div>${paramsHtml}${
+        out.said ? `<p class="adm-said">${esc(out.said)}</p>` : ""}${out.rest.length ? kv(out.rest) : ""}${
+        out.text ? `<pre class="adm-raw${tool.error ? " t-bad" : ""}">${esc(out.text)}</pre>` : ""}</li>`;
+    }
+    const paneEmpty = (title, body) => `<div class="adm-empty"><b>${esc(title)}</b>${esc(body)}</div>`;
+
+    /* ── the tape ─────────────────────────────────────────────────────── */
+
+    function livePane(row, kids) {
+      const listing = row.role === "listing";
+      const list = parseTranscript(row.transcript);
+      const last = lastT(row);
+      const events = row.events || [];
+      return `<header class="adm-pane-head">
+          <p class="kicker"><span>${listing ? "Listing agent call" : "Inbound renter call"}</span>${state(liveStatus(row))}</p>
+          <h2>${esc(listing ? row.summary || row.listing_id : `Session ${row.session_id}`)}</h2>
+          <dl class="adm-ids">
+            <dt>Session</dt><dd>${copy(row.session_id)}</dd>
+            ${listing ? `<dt>Listing</dt><dd>${esc(row.listing_id)}</dd>` : ""}
+            <dt>Conversation</dt><dd>${copy(row.conversation_id)}</dd>
+            <dt>Last activity</dt><dd>${last ? `${clock(last)} · ${agoSpan(last)}` : "–"}</dd>
+          </dl>
+        </header>
+        ${!listing && kids.length ? `<section class="adm-section">
+          <h3>Listing calls <span class="num">${kids.length}</span></h3>
+          <ul class="adm-calls">${kids.map((k) => `<li><span>${esc(k.summary || k.listing_id)}<span class="mono">${
+            esc(k.listing_id)}</span></span>${state(liveStatus(k))}</li>`).join("")}</ul>
+        </section>` : ""}
+        <section class="adm-section">
+          <h3>Timeline <span class="num">${events.length}</span></h3>
+          ${events.length ? timeline(events) : "<p>No webhook has fired for this call yet.</p>"}
+        </section>
+        <section class="adm-section">
+          <h3>Transcript <span class="num">${list.length ? `${list.length} turns` : ""}</span></h3>
+          ${list.length ? turns(list, row.role)
+            : "<p>Nothing yet. ElevenLabs returns the transcript while the call runs and after it ends.</p>"}
+        </section>`;
+    }
+
+    function historyPane() {
+      const d = S.detail;
+      if (!d) {
+        return `<header class="adm-pane-head"><p class="kicker"><span>Conversation</span></p>
+          <h2 class="mono">${esc(S.selHist)}</h2></header>
+          <section class="adm-section"><p${S.detailError ? ' class="t-bad"' : ""}>${
+            esc(S.detailError || "Loading from ElevenLabs…")}</p></section>`;
+      }
+      const list = (d.turns || []).length ? d.turns : parseTranscript(d.transcript);
+      const dir = d.direction && d.direction !== "?" ? d.direction : "";
+      const tools = d.tools || [];
+      return `<header class="adm-pane-head">
+          <p class="kicker"><span>${dir ? `${dir[0].toUpperCase()}${dir.slice(1)} call` : "Call"}</span>${
+            state(conversationStatus(d.status))}</p>
+          <h2>${d.role === "listing" ? "Listing agent call" : "Renter call"}</h2>
+          <dl class="adm-ids">
+            <dt>Conversation</dt><dd>${copy(d.conversation_id)}</dd>
+            <dt>Started</dt><dd>${d.started_at ? `${day(d.started_at)}, ${clock(d.started_at)} · ${agoSpan(d.started_at)}` : "–"}</dd>
+            <dt>Length</dt><dd>${length(d.duration_secs) || "–"}</dd>
+          </dl>
+        </header>
+        <section class="adm-section">
+          <h3>Tool calls <span class="num">${tools.length}</span></h3>
+          ${tools.length ? `<ol class="adm-log">${tools.map(toolCall).join("")}</ol>` : "<p>No tool calls in this conversation.</p>"}
+        </section>
+        <section class="adm-section">
+          <h3>Transcript <span class="num">${list.length ? `${list.length} turns` : ""}</span></h3>
+          ${list.length ? turns(list, d.role) : "<p>No transcript. The call may never have connected.</p>"}
+        </section>`;
+    }
+
+    /* ── the page ─────────────────────────────────────────────────────── */
+
+    function healthHtml() {
+      if (S.tab === "live") {
+        const stale = S.failing && (!S.lastOk || Date.now() - S.lastOk > STALE_MS);
+        if (stale) {
+          return `<span class="adm-dot t-bad" aria-hidden="true"></span><span class="t-bad">Backend unreachable</span>${
+            S.lastOk ? `<span class="num">last ${clock(S.lastOk / 1000)}</span>` : ""}`;
+        }
+        return S.lastOk ? '<span class="adm-dot is-live t-good" aria-hidden="true"></span>Live<span class="num">every 1.2 s</span>'
+          : "Connecting…";
+      }
+      if (S.loadingHist) return "Loading from ElevenLabs…";
+      return S.histLoadedAt ? `ElevenLabs history<span class="num">loaded ${clock(S.histLoadedAt / 1000)}</span>` : "";
+    }
+
+    function liveList(groups) {
+      if (!groups.length && !S.lastOk) {
+        const stale = S.failing && Date.now() - S.lastOk > STALE_MS;
+        return paneEmpty(stale ? "Waiting for the backend" : "Connecting…",
+          "This page asks /admin/live every 1.2 s and fills in as soon as it answers.");
+      }
+      if (!groups.length) {
+        return paneEmpty("No calls yet",
+          "A session appears here the moment a call reaches /agent/init, and its listing calls hang beneath it.");
+      }
+      return `<ol class="adm-rows">${groups.map((g) => {
+        const head = g.head ? `<button type="button" class="adm-row" data-live="${esc(g.head.id)}" data-id="${esc(g.head.id)}"${
+            S.selLive === g.head.id ? ' aria-current="true"' : ""}>
+            <span class="adm-row-main"><span class="adm-row-title">Renter <span class="mono">${esc(g.sid)}</span></span></span>
+            ${rail(reached(g.head, g.kids), g.head.current_tool, g.head.status === "in_flight")}
+            <span class="adm-row-end">${state(liveStatus(g.head))}<span class="adm-when">${agoSpan(g.last)}</span></span>
+          </button>`
+          : `<div class="adm-row"><span class="adm-row-main"><span class="adm-row-title">Session <span class="mono">${esc(g.sid)}</span></span></span></div>`;
+        const kids = g.kids.length ? `<ul class="adm-kids">${g.kids.map((k) => `<li class="adm-kid">
+            <button type="button" class="adm-row" data-live="${esc(k.id)}" data-id="${esc(k.id)}"${
+              S.selLive === k.id ? ' aria-current="true"' : ""}>
+              <span class="adm-row-main"><span class="adm-row-title">${esc(k.summary || k.listing_id)}</span>
+                <span class="adm-row-meta">${esc(k.listing_id)}${k.conversation_id ? ` · ${esc(k.conversation_id)}` : ""}</span></span>
+              <span class="adm-row-end">${state(liveStatus(k))}${lastT(k) ? `<span class="adm-when">${agoSpan(lastT(k))}</span>` : ""}</span>
+            </button></li>`).join("")}</ul>` : "";
+        return `<li class="adm-group">${head}${kids}</li>`;
+      }).join("")}</ol>`;
+    }
+
+    function historyList() {
+      const rows = S.history.length ? `<ol class="adm-rows">${S.history.map((c) => `<li class="adm-group">
+          <button type="button" class="adm-row is-hist" data-hist="${esc(c.conversation_id)}" data-id="${esc(c.conversation_id)}"${
+            S.selHist === c.conversation_id ? ' aria-current="true"' : ""}>
+            <span class="adm-date"><b>${c.started_at ? clock(c.started_at).slice(0, 5) : "–"}</b>${esc(day(c.started_at))}</span>
+            <span class="adm-row-main"><span class="adm-row-title">${roleName(c.role)}${
+              c.direction && c.direction !== "?" ? `<span class="soft"> · ${esc(c.direction)}</span>` : ""}</span>
+              <span class="adm-row-meta">${(c.tools || []).length ? esc(c.tools.join(" · ")) : "no tool calls"}</span></span>
+            <span class="adm-row-end">${state(conversationStatus(c.status))}<span class="adm-when num">${length(c.duration_secs)}</span></span>
+          </button></li>`).join("")}</ol>`
+        : paneEmpty(S.loadingHist ? "Loading…" : "Nothing to show",
+          "The last twenty conversations from both ElevenLabs agents, renter and listing, newest first.");
+      return `<div class="adm-listhead"><h1>Recent conversations</h1><span class="aside">${
+          S.history.length ? `<span class="num">${S.history.length}</span>` : ""}<button type="button" class="adm-link" data-refresh${
+          S.loadingHist ? " disabled" : ""}>${S.loadingHist ? "Refreshing…" : "Refresh"}</button></span></div>${
+        S.histError ? `<p class="adm-error">${esc(S.histError)}</p>` : ""}${rows}`;
+    }
+
+    function figures(groups) {
+      const listing = S.live.filter((c) => c.role === "listing");
+      const count = (s) => listing.filter((c) => c.status === s).length;
+      return [
+        { n: groups.length, label: groups.length === 1 ? "session" : "sessions" },
+        { n: listing.length, label: listing.length === 1 ? "listing call" : "listing calls" },
+        { n: count("calling"), label: "on the line", tone: "live" },
+        { n: count("verified"), label: "verified", tone: "good" },
+        { n: count("booked"), label: "booked", tone: "good" },
+        { n: count("dead"), label: "leased", tone: "bad" },
+        { n: count("no_answer"), label: "no answer", tone: "warn" },
+      ].filter((f, i) => i < 2 || f.n > 0)
+        .map((f) => `<span><span class="num${f.tone ? ` t-${f.tone}` : ""}">${f.n}</span>${f.label}</span>`).join("");
+    }
+
+    function render() {
+      // innerHTML replaces the pane; keep the reader's place in it.
+      const oldPane = document.getElementById("pane");
+      const paneTop = oldPane ? oldPane.scrollTop : 0;
+      const focused = document.activeElement && document.activeElement.dataset
+        ? document.activeElement.dataset.id : "";
+
+      const groups = groupSessions(S.live);
+      const order = groups.flatMap((g) => [...(g.head ? [g.head.id] : []), ...g.kids.map((k) => k.id)]);
+      if (order.length && !order.includes(S.selLive)) S.selLive = order[0];
+      const row = S.live.find((c) => c.id === S.selLive);
+      const kids = row ? (groups.find((g) => g.sid === row.session_id) || { kids: [] }).kids : [];
+
+      const live = S.tab === "live";
+      const list = live
+        ? `<div class="adm-listhead"><h1>Sessions in memory</h1><span class="aside">newest first</span></div>${liveList(groups)}`
+        : historyList();
+      const pane = live
+        ? (row ? livePane(row, kids) : paneEmpty("Nothing selected", "Pick a session or a listing call to see its timeline and transcript."))
+        : (S.selHist ? historyPane() : paneEmpty("Nothing selected", "Pick a conversation to read its tool calls and transcript."));
+
+      app.innerHTML = `<header class="adm-top">
+          <div class="adm-brand"><b>Realest</b><span>Call monitor</span></div>
+          <nav class="adm-tabs" role="tablist" aria-label="Views">
+            <button type="button" role="tab" class="adm-tab" data-tab="live" aria-selected="${live}">Live <span class="num">${groups.length}</span></button>
+            <button type="button" role="tab" class="adm-tab" data-tab="history" aria-selected="${!live}">History</button>
+          </nav>
+          <div class="adm-health" id="health" aria-live="polite">${healthHtml()}</div>
+        </header>
+        ${live && S.lastOk ? `<div class="adm-figures" aria-label="Right now">${figures(groups)}</div>` : ""}
+        <div class="adm-body">
+          <section class="adm-list" role="tabpanel">${list}</section>
+          <aside class="adm-pane" id="pane" aria-label="Call detail">${pane}</aside>
+        </div>`;
+
+      const newPane = document.getElementById("pane");
+      if (newPane) newPane.scrollTop = paneTop;
+      if (focused) {
+        const el = app.querySelector(`[data-id="${CSS.escape(focused)}"]`);
+        if (el) el.focus({ preventScroll: true });
+      }
+    }
+
+    /* ── data ─────────────────────────────────────────────────────────── */
 
     async function pollLive() {
-      if (tab !== "live") return;
+      if (S.tab !== "live" || document.visibilityState === "hidden") return;
+      // Before the first good answer the list itself says what is going on,
+      // so a failure re-renders; after that only the header needs to change.
+      const failed = () => { S.failing = true; if (S.lastOk) tick(); else render(); };
       try {
         const r = await fetch("/admin/live", { cache: "no-store" });
-        if (!r.ok) return;
+        if (!r.ok) { failed(); return; }
         const data = await r.json();
         const calls = Array.isArray(data.calls) ? data.calls : [];
+        const wasLive = Boolean(S.lastOk) && !S.failing;
+        S.lastOk = Date.now();
+        S.failing = false;
         const json = JSON.stringify(calls);
-        if (json === prev) return;
-        prev = json;
-        live = calls;
+        if (json === S.prev && wasLive) { tick(); return; }
+        S.prev = json;
+        S.live = calls;
         render();
-      } catch (_) { /* keep last */ }
-    }
-
-    async function loadHistory() {
-      loadingHist = true;
-      histError = "";
-      render();
-      try {
-        const r = await fetch("/admin/calls?limit=20", { cache: "no-store" });
-        const data = await r.json();
-        history = Array.isArray(data.calls) ? data.calls : [];
-        if (data.error) histError = data.error;
       } catch (_) {
-        histError = "Could not fetch calls";
-      } finally {
-        loadingHist = false;
-        render();
+        failed(); // keep the last good list on screen
       }
     }
 
     async function openHistory(cid) {
-      selectedHist = cid;
-      detail = null;
+      S.selHist = cid;
+      S.detail = null;
+      S.detailError = "";
       render();
       try {
         const r = await fetch(`/admin/calls/${encodeURIComponent(cid)}`, { cache: "no-store" });
-        if (!r.ok) return;
-        detail = await r.json();
-        render();
-      } catch (_) { /* empty pane */ }
-    }
-
-    function renderPane() {
-      const pane = document.getElementById("pane");
-      if (tab === "live") {
-        const row = live.find((c) => c.id === selectedLive);
-        if (!row) {
-          pane.innerHTML = `<h2>Select a call</h2><p class="empty" style="margin-top:12px">Click a row for the log.</p>`;
-          return;
-        }
-        const events = (row.events || []).map((ev) => `
-          <div class="ev">
-            <div class="call-top">
-              <span class="mono" style="font-size:12px">${esc(ev.tool)}</span>
-              <span class="mono ${statusClass(ev.status)}" style="font-size:11px">${esc(ev.status)}</span>
-            </div>
-            <div class="meta mono">${when(ev.t)}${ev.summary ? "  " + esc(ev.summary) : ""}</div>
-          </div>`).join("");
-        const transcript = row.transcript
-          ? `<h3>Transcript</h3><pre>${esc(row.transcript)}</pre>` : "";
-        pane.innerHTML = `<h2>${esc(row.role)} ${esc(row.session_id)}</h2>${events}${transcript}`;
-        return;
+        if (S.selHist !== cid) return;
+        if (!r.ok) S.detailError = `ElevenLabs answered ${r.status} for this conversation.`;
+        else S.detail = await r.json();
+      } catch (_) {
+        S.detailError = "Could not reach the backend.";
       }
-      if (!selectedHist) {
-        pane.innerHTML = `<h2>Select a call</h2><p class="empty" style="margin-top:12px">Click a row for the log.</p>`;
-        return;
-      }
-      if (!detail) {
-        pane.innerHTML = `<h2>${esc(selectedHist)}</h2><p class="empty" style="margin-top:12px">Loading…</p>`;
-        return;
-      }
-      const tools = (detail.tools || []).map((tool) => `
-        <div class="ev">
-          <div class="call-top">
-            <span class="mono" style="font-size:12px">${esc(tool.name)}</span>
-            <span class="mono ${tool.error ? "st-dead" : "st-real"}" style="font-size:11px">${tool.error ? "error" : "ok"}</span>
-          </div>
-          ${tool.params && tool.params !== "{}" ? `<pre>${esc(tool.params)}</pre>` : ""}
-          ${tool.result ? `<pre style="color:var(--faint)">${esc(tool.result)}</pre>` : ""}
-        </div>`).join("");
-      const turns = (detail.turns || []).length
-        ? `<h3>Transcript</h3>${detail.turns.map((t) => `
-            <div class="turn"><div class="role mono">${esc(t.role)}</div><p>${esc(t.text)}</p></div>`).join("")}`
-        : detail.transcript
-          ? `<h3>Transcript</h3><pre>${esc(detail.transcript)}</pre>` : "";
-      pane.innerHTML = `<h2>${esc(detail.role)} ${esc(detail.conversation_id)}</h2>${tools}${turns}`;
-    }
-
-    function render() {
-      const list = document.getElementById("list");
-      document.getElementById("tab-live").className = tab === "live" ? "on" : "";
-      document.getElementById("tab-hist").className = tab === "history" ? "on" : "";
-      if (tab === "live") {
-        list.innerHTML = `
-          <div class="row-head">
-            <h1>Live calls</h1>
-            <span class="mono tnum meta">${live.length}</span>
-          </div>
-          ${live.length === 0
-            ? `<p class="empty">No in-memory sessions yet.</p>`
-            : `<ol>${live.map((c) => `
-                <li><button type="button" class="call ${selectedLive === c.id ? "sel" : ""}" data-live="${esc(c.id)}">
-                  <div class="call-top">
-                    <span class="call-title">${esc(c.role)}${c.summary ? " · " + esc(c.summary) : ""}</span>
-                    <span class="mono ${statusClass(c.status)}" style="font-size:11px">${esc(
-                      c.current_tool && c.status === "in_flight" ? c.current_tool : c.status
-                    )}</span>
-                  </div>
-                  <div class="meta mono">${esc(c.session_id)}${c.listing_id ? " · " + esc(c.listing_id) : ""}</div>
-                  ${toolRail(c.tools, c.current_tool)}
-                </button></li>`).join("")}</ol>`}`;
-      } else {
-        list.innerHTML = `
-          <div class="row-head">
-            <h1>Last calls</h1>
-            <button type="button" class="linkish mono" id="btn-fetch" style="font-size:11px">${loadingHist ? "Fetching…" : "Fetch"}</button>
-          </div>
-          ${histError ? `<p class="err">${esc(histError)}</p>` : ""}
-          ${history.length === 0 && !loadingHist
-            ? `<p class="empty">Fetch to load the last ElevenLabs conversations.</p>`
-            : `<ol>${history.map((c) => `
-                <li><button type="button" class="call ${selectedHist === c.conversation_id ? "sel" : ""}" data-hist="${esc(c.conversation_id)}">
-                  <div class="call-top">
-                    <span class="call-title">${esc(c.role)}${c.direction ? " · " + esc(c.direction) : ""}</span>
-                    <span class="mono ${statusClass(c.status)}" style="font-size:11px">${esc(c.status || "—")}</span>
-                  </div>
-                  <div class="meta mono" style="display:flex;justify-content:space-between;gap:16px">
-                    <span>${esc(c.conversation_id)}</span>
-                    <span class="tnum">${c.duration_secs != null ? c.duration_secs + "s" : ""}</span>
-                  </div>
-                  ${(c.tools || []).length ? `<div class="meta mono" style="color:var(--muted);margin-top:4px">${esc(c.tools.join(" — "))}</div>` : ""}
-                </button></li>`).join("")}</ol>`}`;
-        const btn = document.getElementById("btn-fetch");
-        if (btn) btn.onclick = () => void loadHistory();
-      }
-      list.querySelectorAll("[data-live]").forEach((el) => {
-        el.onclick = () => { selectedLive = el.getAttribute("data-live"); render(); };
-      });
-      list.querySelectorAll("[data-hist]").forEach((el) => {
-        el.onclick = () => void openHistory(el.getAttribute("data-hist"));
-      });
-      renderPane();
-    }
-
-    document.getElementById("tab-live").onclick = () => { tab = "live"; render(); };
-    document.getElementById("tab-hist").onclick = () => {
-      tab = "history";
       render();
-      if (!history.length && !loadingHist) void loadHistory();
-    };
+    }
+
+    async function loadHistory() {
+      S.loadingHist = true;
+      S.histError = "";
+      render();
+      try {
+        const r = await fetch("/admin/calls?limit=20", { cache: "no-store" });
+        const data = await r.json();
+        S.history = Array.isArray(data.calls) ? data.calls : [];
+        S.histLoadedAt = Date.now();
+        if (data.error) S.histError = data.error;
+      } catch (_) {
+        S.histError = "Could not fetch calls.";
+      } finally {
+        S.loadingHist = false;
+        render();
+      }
+      // Open the newest conversation so the tape is never blank on arrival.
+      if (!S.selHist && S.history.length) void openHistory(S.history[0].conversation_id);
+    }
+
+    // Relative times and the health line move every second; nothing else does.
+    function tick() {
+      for (const el of app.querySelectorAll("[data-ago]")) el.textContent = ago(Number(el.dataset.ago));
+      const h = document.getElementById("health");
+      if (h) h.innerHTML = healthHtml();
+    }
+
+    function reveal() {
+      if (window.matchMedia("(max-width: 1023px)").matches) {
+        const pane = document.getElementById("pane");
+        if (pane) pane.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    /* ── input ────────────────────────────────────────────────────────── */
+
+    app.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-tab],[data-live],[data-hist],[data-refresh],[data-copy]");
+      if (!t) return;
+      if (t.dataset.tab) {
+        S.tab = t.dataset.tab;
+        render();
+        if (S.tab === "live") void pollLive();
+        else if (!S.histLoadedAt && !S.loadingHist) void loadHistory();
+      } else if (t.dataset.live) {
+        S.selLive = t.dataset.live;
+        render();
+        reveal();
+      } else if (t.dataset.hist) {
+        void openHistory(t.dataset.hist);
+        reveal();
+      } else if ("refresh" in t.dataset) {
+        void loadHistory();
+      } else if (t.dataset.copy) {
+        navigator.clipboard.writeText(t.dataset.copy).then(() => {
+          t.classList.add("is-done");
+          t.querySelector(".note").textContent = "copied";
+          setTimeout(() => {
+            t.classList.remove("is-done");
+            const note = t.querySelector(".note");
+            if (note) note.textContent = "copy";
+          }, 1200);
+        }).catch(() => { /* clipboard needs a secure context */ });
+      }
+    });
+
+    // ↑/↓ or j/k walk the list.
+    app.addEventListener("keydown", (e) => {
+      const rows = e.target.closest(".adm-rows");
+      if (!rows) return;
+      const down = e.key === "ArrowDown" || e.key === "j";
+      const up = e.key === "ArrowUp" || e.key === "k";
+      if (!down && !up) return;
+      e.preventDefault();
+      const ids = [...rows.querySelectorAll("[data-id]")].map((el) => el.dataset.id);
+      const focused = e.target.closest("[data-id]");
+      const current = focused ? focused.dataset.id : (S.tab === "live" ? S.selLive : S.selHist);
+      const next = ids[Math.min(ids.length - 1, Math.max(0, ids.indexOf(current) + (down ? 1 : -1)))];
+      if (!next) return;
+      if (S.tab === "live") { S.selLive = next; render(); }
+      else void openHistory(next);
+      const el = app.querySelector(`[data-id="${CSS.escape(next)}"]`);
+      if (el) el.focus();
+    });
+
     render();
-    pollLive();
-    setInterval(pollLive, 1200);
+    void pollLive();
+    setInterval(pollLive, POLL_MS);
+    setInterval(tick, 1000);
+  })();
   </script>
 </body>
 </html>
