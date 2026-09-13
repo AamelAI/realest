@@ -25,11 +25,16 @@ export type Status = {
   proven: boolean;
 };
 
-const REAL = "var(--color-real)", REAL_BG = "var(--color-real-bg)";
-const WARN = "var(--color-warn)", WARN_BG = "var(--color-warn-bg)";
-const DEAD = "var(--color-dead)", DEAD_BG = "var(--color-dead-bg)";
-const NONE = "var(--color-none)", NONE_BG = "var(--color-none-bg)";
-const ACCENT = "var(--color-accent)";
+// Colour means status and nothing else. Three hues — confirmed, live, gone —
+// and everything else is ink. "No answer" is deliberately not a warning colour:
+// nobody picking up is a normal outcome with the next step already taken.
+// Every value is a literal `var(--color-…)` so the token is always emitted.
+const REAL = "var(--color-real)";
+const LIVE = "var(--color-live)";
+const DEAD = "var(--color-dead)";
+const QUIET = "var(--color-ink-2)";
+const NONE = "var(--color-ink-3)";
+const CHIP = "var(--color-press)";
 
 export function statusOf(card: Card, starting = false): Status {
   const o = card.outcome;
@@ -39,39 +44,39 @@ export function statusOf(card: Card, starting = false): Status {
   if (starting && isSelectable(card.status)) {
     return {
       label: "Starting", short: "Starting call…",
-      fg: ACCENT, bg: "var(--color-tint)", dot: ACCENT, dead: false, proven: false,
+      fg: LIVE, bg: CHIP, dot: LIVE, dead: false, proven: false,
     };
   }
   switch (card.status) {
     case "booked":
       return {
         label: "Booked", short: o?.viewing_slot ? `Booked · ${o.viewing_slot}` : "Booked",
-        fg: REAL, bg: REAL_BG, dot: REAL, dead: false, proven: true,
+        fg: REAL, bg: CHIP, dot: REAL, dead: false, proven: true,
       };
     case "verified":
       return {
         label: "Real", short: o?.pets_allowed ? `Real · ${o.pets_allowed}` : "Real",
-        fg: REAL, bg: REAL_BG, dot: REAL, dead: false, proven: true,
+        fg: REAL, bg: CHIP, dot: REAL, dead: false, proven: true,
       };
     case "dead":
       return {
         label: "Leased", short: "Leased — still posted",
-        fg: DEAD, bg: DEAD_BG, dot: DEAD, dead: true, proven: false,
+        fg: DEAD, bg: CHIP, dot: DEAD, dead: true, proven: false,
       };
     case "no_answer":
       return {
         label: "Emailed", short: "No answer · emailed",
-        fg: WARN, bg: WARN_BG, dot: WARN, dead: false, proven: false,
+        fg: QUIET, bg: CHIP, dot: NONE, dead: false, proven: false,
       };
     case "calling":
       return {
         label: "Calling", short: "On the phone now",
-        fg: ACCENT, bg: "var(--color-tint)", dot: ACCENT, dead: false, proven: false,
+        fg: LIVE, bg: CHIP, dot: LIVE, dead: false, proven: false,
       };
     default:
       return {
         label: "Not checked", short: "Not checked",
-        fg: NONE, bg: NONE_BG, dot: "var(--color-dim)", dead: false, proven: false,
+        fg: NONE, bg: CHIP, dot: "var(--color-line)", dead: false, proven: false,
       };
   }
 }
@@ -167,12 +172,13 @@ export function phaseOf(s: SessionState): Phase {
 /** Statuses that mean a human actually told us something. */
 export const CONFIRMED: CallStatus[] = ["verified", "booked", "dead"];
 
+// Sentence case, and nothing the page can't back up — no "just now".
 export const HEADER_STATUS: Record<Phase, string> = {
-  waiting: "connecting",
-  listening: "listening — page updates live",
-  calling: "calling agents",
-  verified: "verified just now",
-  emailed: "no answer — emailed instead",
+  waiting: "Connecting",
+  listening: "Listening",
+  calling: "Calling agents",
+  verified: "Verified by phone",
+  emailed: "No answer · draft ready",
 };
 
 /** Which listings the renter may still send us out to call. */

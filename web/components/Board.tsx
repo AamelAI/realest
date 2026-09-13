@@ -216,7 +216,7 @@ export function Board({
   }
 
   return (
-    <div className="min-h-dvh bg-surface pb-10">
+    <div className="min-h-dvh bg-ground pb-10">
       <Header
         criteria={criteria}
         fresh={fresh}
