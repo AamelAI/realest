@@ -12,6 +12,7 @@ export type CallOutcome = {
   viewing_slot: string | null;
   answers: Record<string, string>;
   source: string;                // "Mark · 1:42pm" — provenance for the card
+  raw_transcript?: string;       // the call itself, verbatim, when one happened
 };
 
 /**
@@ -32,6 +33,8 @@ export type Card = {
   amenities: string[];
   transit_note: string;
   photo_url: string;
+  photos?: string[];             // the listing's own photos, for the detail view
+  source_url?: string;           // the original listing
   agent_name: string;
 
   status: CallStatus;

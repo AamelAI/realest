@@ -10,61 +10,92 @@ import type { Card, CallStatus, SessionState } from "./types";
 
 export const money = (n: number) => "$" + n.toLocaleString("en-CA");
 
-/* ── status ──────────────────────────────────────────────────────────────── */
+// Colour means status and nothing else. Three hues — confirmed, live, gone —
+// and everything else is ink. "No answer" is deliberately not a warning colour:
+// nobody picking up is a normal outcome with the next step already taken.
+// Every value is a literal `var(--color-…)` so the token is always emitted.
+const REAL = "var(--color-real)";
+const LIVE = "var(--color-live)";
+const DEAD = "var(--color-dead)";
+const QUIET = "var(--color-ink-2)";
+const NONE = "var(--color-ink-3)";
 
-export type Status = {
-  /** the pill label */
-  label: string;
-  /** the one-line form used in dense rows and the calls panel */
-  short: string;
-  fg: string;
-  bg: string;
+/* ── the status line: what happened, and who said so ─────────────────────── */
+
+export type StatusLine = {
+  /** the word, set in its colour */
+  word: string;
+  /** who said it and when, verbatim — or the next step */
+  detail: string;
+  /** a live call length to show in mono after the detail */
+  clock: boolean;
+  tone: string;
   dot: string;
-  dead: boolean;
-  /** verified-real gets a green card edge */
-  proven: boolean;
 };
 
-const REAL = "var(--color-real)", REAL_BG = "var(--color-real-bg)";
-const WARN = "var(--color-warn)", WARN_BG = "var(--color-warn-bg)";
-const DEAD = "var(--color-dead)", DEAD_BG = "var(--color-dead-bg)";
-const NONE = "var(--color-none)", NONE_BG = "var(--color-none-bg)";
-const ACCENT = "var(--color-accent)";
-
-export function statusOf(card: Card): Status {
+/**
+ * One line that replaces the tinted pill. The attributed fact is the badge:
+ * "Confirmed · Mark, 1:42pm" says more than a green "Real" ever could.
+ *
+ * `outcome.source` is free-form text written by the call extractor, so it is
+ * rendered exactly as it arrived — never parsed, never reformatted, and never
+ * given a time it didn't come with.
+ */
+export function statusLineOf(card: Card, starting = false): StatusLine {
   const o = card.outcome;
+  const src = o?.source?.trim() ?? "";
+  if (starting && isSelectable(card.status)) {
+    return { word: "Starting call…", detail: "", clock: false, tone: LIVE, dot: LIVE };
+  }
   switch (card.status) {
-    case "booked":
-      return {
-        label: "Booked", short: o?.viewing_slot ? `Booked · ${o.viewing_slot}` : "Booked",
-        fg: REAL, bg: REAL_BG, dot: REAL, dead: false, proven: true,
-      };
-    case "verified":
-      return {
-        label: "Real", short: o?.pets_allowed ? `Real · ${o.pets_allowed}` : "Real",
-        fg: REAL, bg: REAL_BG, dot: REAL, dead: false, proven: true,
-      };
-    case "dead":
-      return {
-        label: "Leased", short: "Leased — still posted",
-        fg: DEAD, bg: DEAD_BG, dot: DEAD, dead: true, proven: false,
-      };
-    case "no_answer":
-      return {
-        label: "Emailed", short: "No answer · emailed",
-        fg: WARN, bg: WARN_BG, dot: WARN, dead: false, proven: false,
-      };
     case "calling":
       return {
-        label: "Calling", short: "On the phone now",
-        fg: ACCENT, bg: "var(--color-tint)", dot: ACCENT, dead: false, proven: false,
+        word: "On the phone",
+        detail: card.agent_name ? `with ${card.agent_name}` : "",
+        clock: true, tone: LIVE, dot: LIVE,
       };
+    case "verified":
+      return { word: "Confirmed", detail: src, clock: false, tone: REAL, dot: REAL };
+    case "booked":
+      return { word: "Booked", detail: src, clock: false, tone: REAL, dot: REAL };
+    case "dead":
+      return { word: "Leased", detail: src, clock: false, tone: DEAD, dot: DEAD };
+    case "no_answer":
+      return { word: "No answer", detail: "Draft ready", clock: false, tone: QUIET, dot: NONE };
     default:
-      return {
-        label: "Not checked", short: "Not checked",
-        fg: NONE, bg: NONE_BG, dot: "var(--color-dim)", dead: false, proven: false,
-      };
+      return { word: "Not checked yet", detail: "", clock: false, tone: NONE, dot: "var(--color-line)" };
   }
+}
+
+/* ── facts: two inks, so a human's word never looks like a listing's claim ── */
+
+export type Fact = { text: string; kind: "call" | "listed" | "conflict" };
+
+/**
+ * What the card knows beyond the rent. A fact a person said on the phone and a
+ * claim copied from the listing must never look the same — the first is the
+ * product, the second is what the product exists to check.
+ *
+ * Only numeric conflicts are called out (the real rent over the renter's cap).
+ * Free-text judgements like "cats only vs. a dog" are left to the renter.
+ */
+export function factsOf(card: Card, maxRent?: number | null): Fact[] {
+  const o = card.outcome;
+  const out: Fact[] = [];
+  const now = o?.real_rent ?? card.rent;
+  if (maxRent && maxRent > 0 && now > maxRent) {
+    out.push({ text: `Over your ${money(maxRent)} budget`, kind: "conflict" });
+  }
+  if (o) {
+    for (const a of o.addons) out.push({ text: cap(a), kind: "call" });
+    if (o.pets_allowed) out.push({ text: cap(o.pets_allowed), kind: "call" });
+    if (o.viewing_slot) out.push({ text: `Viewing ${o.viewing_slot}`, kind: "call" });
+    for (const [k, v] of Object.entries(o.answers ?? {})) out.push({ text: `${cap(k)}: ${v}`, kind: "call" });
+    return out;
+  }
+  if (card.parking_included) out.push({ text: "Parking included", kind: "listed" });
+  if (card.pets) out.push({ text: `Pets: ${card.pets}`, kind: "listed" });
+  return out;
 }
 
 /* ── the note: what the call actually turned up ──────────────────────────── */
@@ -82,9 +113,8 @@ export function noteOf(card: Card): string {
       return "";
     default: {
       if (!o) return "";
-      // Terse on purpose: the card is a fixed 144px and the note is clamped to
-      // three lines, so anything verbose here pushes the provenance off the
-      // card — and provenance is the half that makes this evidence.
+      // Terse on purpose: this is the one-sentence account of the call shown
+      // under each row of the calls list.
       const bits: string[] = [];
       if (o.addons.length) {
         const real = o.real_rent;
@@ -107,14 +137,6 @@ export function noteOf(card: Card): string {
 }
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
-
-/** Old figure struck, real figure beside it — the correction is the product. */
-export function rentOf(card: Card): { now: string; was: string } {
-  const real = card.outcome?.real_rent ?? null;
-  return real !== null && real !== card.rent
-    ? { now: money(real), was: money(card.rent) }
-    : { now: money(card.rent), was: "" };
-}
 
 /* ── the criteria chips: the renter's profile, updating live ─────────────── */
 
@@ -156,14 +178,15 @@ export function phaseOf(s: SessionState): Phase {
 }
 
 /** Statuses that mean a human actually told us something. */
-export const CONFIRMED: CallStatus[] = ["verified", "booked", "dead"];
+const CONFIRMED: CallStatus[] = ["verified", "booked", "dead"];
 
+// Sentence case, and nothing the page can't back up — no "just now".
 export const HEADER_STATUS: Record<Phase, string> = {
-  waiting: "connecting",
-  listening: "listening — page updates live",
-  calling: "calling agents",
-  verified: "verified just now",
-  emailed: "no answer — emailed instead",
+  waiting: "Connecting",
+  listening: "Listening",
+  calling: "Calling agents",
+  verified: "Verified by phone",
+  emailed: "No answer · draft ready",
 };
 
 /** Which listings the renter may still send us out to call. */
