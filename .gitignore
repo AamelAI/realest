@@ -13,6 +13,7 @@ dist/
 .DS_Store
 .vercel
 generated/
+deploy/
 
 # generated: contains personal demo contacts, regenerate with `make listings`
 data/listings.json
