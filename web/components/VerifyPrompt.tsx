@@ -12,12 +12,13 @@ export const DEFAULT_ASKS: string[] = ASKS.slice(0, 3);
 export const ALL_ASKS: string[] = [...ASKS];
 
 /**
- * The approval gate. Voice asked "anything else you want me to ask?"; this is
- * where the renter answers — tapping three boxes is far more reliable than
- * parsing "the first and the third" out of a phone call.
+ * The approval gate, written as a plan the renter can read in two seconds:
+ * who will be called, and what they'll be asked. Approving is one tap, and the
+ * button names exactly what it will do.
  */
 export function VerifyPrompt({
   count,
+  names,
   asks,
   onToggleAsk,
   spokenAsk,
@@ -26,6 +27,8 @@ export function VerifyPrompt({
   failed = false,
 }: {
   count: number;
+  /** agent names for the chosen listings, in order — used only when unambiguous */
+  names: string[];
   asks: string[];
   onToggleAsk: (a: string) => void;
   /** what the renter said out loud, transcribed by the voice layer */
@@ -37,22 +40,19 @@ export function VerifyPrompt({
 }) {
   return (
     <section
-      className="r-in mx-[14px] mt-4 rounded-[16px] p-[14px]"
-      style={{ border: "1.5px solid var(--color-accent)", background: "var(--color-tint)" }}
+      className="r-in mx-4 mt-6 rounded-card border bg-surface p-4"
+      style={{ borderColor: "var(--color-line)" }}
       aria-labelledby="verify-title"
     >
-      <h2 id="verify-title" className="text-[14px] font-semibold leading-[1.4]">
-        Listings go stale fast. Want me to call and check they&rsquo;re real?
+      <h2 id="verify-title" className="text-fact font-strong">
+        Want me to call and check they&rsquo;re real?
       </h2>
-      <p className="mt-1 text-[11.5px] text-muted">
-        {count} selected · tap a listing to change
+      <p className="mt-1 text-support text-ink-2">
+        {count} chosen · tap a listing to change
       </p>
 
-      <p className="mt-[13px] text-[10.5px] font-semibold uppercase tracking-[.08em] text-faint">
-        Anything else you want me to ask?
-      </p>
-
-      <div className="mt-2 flex flex-wrap gap-[6px]">
+      <p className="mt-4 text-support text-ink-2">I&rsquo;ll ask about</p>
+      <div className="mt-2 flex flex-wrap gap-2">
         {ASKS.map((a) => {
           const on = asks.includes(a);
           return (
@@ -61,11 +61,11 @@ export function VerifyPrompt({
               type="button"
               aria-pressed={on}
               onClick={() => onToggleAsk(a)}
-              className="rounded-full px-[10px] py-[5px] text-[11px] font-medium transition-colors"
+              className="min-h-[36px] rounded-full border px-3 text-meta font-label transition-colors duration-150"
               style={{
-                border: `1px solid ${on ? "var(--color-accent)" : "rgba(20,22,26,.15)"}`,
-                background: on ? "var(--color-accent)" : "#fff",
-                color: on ? "#fff" : "var(--color-muted)",
+                borderColor: on ? "var(--color-ink)" : "var(--color-line)",
+                color: on ? "var(--color-ink)" : "var(--color-ink-3)",
+                boxShadow: on ? "inset 0 0 0 0.5px var(--color-ink)" : "none",
               }}
             >
               {a}
@@ -75,11 +75,8 @@ export function VerifyPrompt({
       </div>
 
       {spokenAsk && (
-        <p
-          className="mt-[10px] rounded-[10px] bg-surface px-3 py-[10px] text-[12px] leading-[1.45]"
-          style={{ border: "1px solid var(--accent-25)" }}
-        >
-          {spokenAsk}
+        <p className="mt-3 text-support text-ink-2">
+          You also asked: <span className="text-ink">&ldquo;{spokenAsk}&rdquo;</span>
         </p>
       )}
 
@@ -87,22 +84,35 @@ export function VerifyPrompt({
         type="button"
         onClick={onCall}
         disabled={sending || count === 0}
-        className="mt-[14px] w-full rounded-[12px] py-[13px] text-[14px] font-semibold text-white transition-opacity hover:opacity-90 active:opacity-80 disabled:opacity-40"
-        style={{ background: "var(--color-accent)" }}
+        className="mt-4 h-[52px] w-full rounded-control bg-ink text-fact font-label text-white transition-[opacity,transform] duration-150 active:scale-[.98] disabled:opacity-40"
       >
-        {sending
-          ? "Starting calls…"
-          : count === 0
-            ? "Pick a listing to call"
-            : `Call ${count} agent${count === 1 ? "" : "s"} now`}
+        {sending ? "Starting calls…" : callLabel(count, names)}
       </button>
 
       {failed && (
-        <p className="mt-2 text-[11.5px]" style={{ color: "var(--color-warn)" }}>
-          That didn&rsquo;t reach the line. Your picks are still here — try again, or just
-          tell the agent out loud.
+        <p className="mt-2 text-support" style={{ color: "var(--color-dead)" }}>
+          That didn&rsquo;t reach the line. Your picks are still here — try again, or tell the agent
+          out loud.
         </p>
       )}
     </section>
   );
+}
+
+/**
+ * "Call Nadia, Dana and Raj" — but only when that's unambiguous. Several
+ * listings share an agent, so repeated or missing names fall back to a count.
+ */
+function callLabel(count: number, names: string[]): string {
+  if (count === 0) return "Pick a listing to call";
+  const clean = names.filter(Boolean);
+  const unique = new Set(clean);
+  if (clean.length === count && unique.size === count && count <= 3) {
+    const list =
+      count === 1 ? clean[0]
+      : count === 2 ? `${clean[0]} and ${clean[1]}`
+      : `${clean[0]}, ${clean[1]} and ${clean[2]}`;
+    return `Call ${list}`;
+  }
+  return `Call ${count} agent${count === 1 ? "" : "s"}`;
 }
