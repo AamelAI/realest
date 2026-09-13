@@ -6,6 +6,7 @@ DO NOT build an audio pipeline. bridge.py owns audio entirely.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -33,25 +34,47 @@ OUT_OF_HOURS = (
 
 E164 = re.compile(r"^\+[1-9]\d{7,14}$")
 
-# session_id -> listing-agent number the caller asked us to dial (e.g. +111111111111)
+# session_id -> listing-agent number the caller asked us to dial
 _session_dest: dict[str, str] = {}
+# (session_id, listing_id) -> dest from DEMO_AGENT_PHONE[i]
+_listing_dest: dict[tuple[str, str], str] = {}
 
 
 def as_e164(raw: str) -> str:
-    """Accept +1+111111111111, +111111111111, or 1-437-555-0100. Empty if not a phone."""
+    """Accept +14165550101, 4165550101, or +4165550101 (NANP missing the 1)."""
     if not raw:
         return ""
     raw = str(raw).strip()
-    if E164.match(raw):
-        return raw
     digits = re.sub(r"\D", "", raw)
     if len(digits) == 11 and digits.startswith("1"):
         cand = "+" + digits
-    elif len(digits) == 10:
+    elif len(digits) == 10 and digits[0] in "23456789":
         cand = "+1" + digits
+    elif E164.match(raw):
+        return raw
     else:
         return ""
     return cand if E164.match(cand) else ""
+
+
+def demo_phones() -> list[str]:
+    """DEMO_AGENT_PHONE as a CSV or JSON array of E.164 numbers."""
+    raw = (os.getenv("DEMO_AGENT_PHONE") or "").strip()
+    if not raw:
+        return []
+    if raw.startswith("["):
+        try:
+            items = json.loads(raw)
+        except json.JSONDecodeError:
+            items = []
+    else:
+        items = [p for p in re.split(r"[,;]+", raw) if p.strip()]
+    out: list[str] = []
+    for item in items:
+        dest = as_e164(str(item))
+        if dest:
+            out.append(dest)
+    return out
 
 
 def set_session_dest(session_id: str, phone: str) -> str:
@@ -63,18 +86,42 @@ def set_session_dest(session_id: str, phone: str) -> str:
 
 
 def destination(session_id: str, listing) -> str:
-    """Where the listing agent call actually goes.
+    """Where this listing's agent call actually goes.
+
+    Per-listing demo pair first, then a caller-stated session dest, then the
+    listing's own teammate number, then the first DEMO_AGENT_PHONE.
     """
-    override = _session_dest.get(session_id) or as_e164(os.getenv("DEMO_AGENT_PHONE", ""))
-    if override:
-        return override
+    lid = getattr(listing, "listing_id", "") or ""
+    if lid and (session_id, lid) in _listing_dest:
+        return _listing_dest[(session_id, lid)]
+    if session_id in _session_dest:
+        return _session_dest[session_id]
     if listing and listing.agent_phone:
         return as_e164(listing.agent_phone) or listing.agent_phone
-    return as_e164(os.getenv("DEMO_AGENT_PHONE", ""))
+    phones = demo_phones()
+    return phones[0] if phones else ""
+
+
+def assign_demo_targets(session_id: str, listing_ids: list[str]) -> list[str]:
+    """Zip shortlist onto DEMO_AGENT_PHONE. Stop when the phone list ends."""
+    phones = demo_phones()
+    if not phones:
+        log.info("start-calls[%s]: no DEMO_AGENT_PHONE — not dialing", session_id)
+        return []
+    paired: list[str] = []
+    for lid, phone in zip(listing_ids, phones):
+        _listing_dest[(session_id, lid)] = phone
+        paired.append(lid)
+        log.info("start-calls[%s]: %s → %s", session_id, lid, phone)
+    skipped = listing_ids[len(phones):]
+    if skipped:
+        log.info("start-calls[%s]: skip %s — demo numbers exhausted (%d)",
+                 session_id, skipped, len(phones))
+    return paired
 
 
 def unique_destinations(session_id: str, listing_ids: list[str]) -> list[str]:
-    """One live ring per number. The demo shortlist shares one teammate phone."""
+    """One live ring per number. Prefer assign_demo_targets for the demo path."""
     if transport.is_stub():
         return listing_ids
     seen: set[str] = set()
