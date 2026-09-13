@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "book_viewing",
-  "description": "Call this only when the caller confirms a specific viewing time on a specific listing. After it returns, read the speak field aloud.",
+  "description": "Call this when the caller confirms or rejects a viewing on a specific listing. decision is confirm or reject. That texts the listing agent a confirmation or a rejection. After it returns, read the speak field aloud.",
   "api_schema": {
     "url": "https://zipping-scarf-actress.ngrok-free.dev/agent/book",
     "method": "POST",
@@ -10,7 +10,7 @@
     "request_body_schema": {
       "id": "body",
       "type": "object",
-      "description": "The listing and time the caller just confirmed.",
+      "description": "The listing, time, and whether the renter is confirming or passing.",
       "required": true,
       "value_type": "llm_prompt",
       "properties": [
@@ -41,7 +41,17 @@
           "dynamic_variable": "",
           "constant_value": "",
           "value_type": "llm_prompt",
-          "required": true,
+          "required": false,
+          "enum": null
+        },
+        {
+          "id": "decision",
+          "type": "string",
+          "description": "confirm to book and text the landlord a confirmation. reject to text them that the renter is passing. Default confirm.",
+          "dynamic_variable": "",
+          "constant_value": "",
+          "value_type": "llm_prompt",
+          "required": false,
           "enum": null
         }
       ]

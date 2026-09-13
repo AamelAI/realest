@@ -10,4 +10,6 @@ The renter's viewing availability is {{availability}}.
 If that string is not empty, confirm those exact times with the landlord or listing agent and lock a viewing that fits. If none of those work, get the next open slot they can offer.
 If availability is empty, just ask for a viewing slot.
 
+Tell them we will text this number a confirmation or a rejection once the renter decides. Do not promise the viewing is booked on this call.
+
 Call record_outcome before you hang up with exactly what they told you and nothing they didn't. Keep it under 60 seconds and be polite. Never invent a time they did not offer.

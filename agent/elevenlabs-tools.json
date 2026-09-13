@@ -78,7 +78,7 @@
         {
             "type": "webhook",
             "name": "book_viewing",
-            "description": "Call this when the caller confirms a specific viewing slot on a specific listing.",
+            "description": "Call this when the caller confirms or rejects a viewing on a specific listing. decision is confirm or reject. That texts the listing agent a confirmation or a rejection. After it returns, read the speak field aloud.",
             "api_schema": {
                 "url": "{PUBLIC_URL}/agent/book",
                 "method": "POST",
@@ -90,10 +90,14 @@
                             "description": "Dynamic variable {{session_id}}. Do not invent this.",
                             "dynamic_variable": "session_id"
                         },
-                        "listing_id": { "type": "string", "description": "Listing to book." },
-                        "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." }
+                        "listing_id": { "type": "string", "description": "Listing to book or pass on." },
+                        "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." },
+                        "decision": {
+                            "type": "string",
+                            "description": "confirm to book and text the landlord a confirmation. reject to text them that the renter is passing. Default confirm."
+                        }
                     },
-                    "required": ["session_id", "listing_id", "slot"]
+                    "required": ["session_id", "listing_id"]
                 }
             }
         },

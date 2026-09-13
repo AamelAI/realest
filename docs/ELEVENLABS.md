@@ -49,7 +49,7 @@ Assign the imported Twilio number to this agent so a human dial-in hits it. Copy
 
 First message **must** identify as an AI, then ask if the unit is open, real parking cost, pets, and a viewing slot. Under 60 seconds.
 
-Paste `agent/listing-prompt.txt` into the Listing **System prompt**. `{{availability}}` is the renter's free times — confirm those with the landlord. Also add `availability` as a string field on the renter `start_calls` tool.
+Paste `agent/listing-prompt.txt` into the Listing **System prompt**. `{{availability}}` is the renter's free times — confirm those with the landlord, and tell them we will text a confirmation or a rejection. Also add `availability` on `start_calls` and `decision` (confirm|reject) on `book_viewing`.
 
 Copy the agent id → `ELEVENLABS_LISTING_AGENT_ID`.
 

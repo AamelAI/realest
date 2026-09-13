@@ -49,14 +49,15 @@
         {
             "type": "function",
             "name": "book_viewing",
-            "description": "Call this when the caller confirms a specific viewing slot on a specific listing.",
+            "description": "Call this when the caller confirms or rejects a viewing. decision is confirm or reject. That texts the listing agent either way.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "listing_id": { "type": "string", "description": "Listing to book." },
-                    "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." }
+                    "listing_id": { "type": "string", "description": "Listing to book or pass on." },
+                    "slot": { "type": "string", "description": "Agreed time, e.g. Saturday 2:00pm." },
+                    "decision": { "type": "string", "description": "confirm or reject. Default confirm." }
                 },
-                "required": ["listing_id", "slot"]
+                "required": ["listing_id"]
             }
         },
         {

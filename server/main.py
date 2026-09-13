@@ -496,14 +496,48 @@ async def agent_outcome(payload: dict):
     return {"speak": "Got it, thanks.", "session_id": sid, "agent_says": s.agent_says}
 
 
+def _book_decision(payload: dict) -> str:
+    raw = _as_text(payload.get("decision") or payload.get("action") or "confirm").lower()
+    if raw in {"reject", "rejected", "decline", "declined", "pass", "no"}:
+        return "reject"
+    return "confirm"
+
+
 @app.post("/agent/book")
 async def agent_book(payload: dict):
-    """Plain code does the write - the model only calls this."""
+    """Plain code does the write - the model only calls this.
+
+    Texts the renter and the listing-agent / landlord. decision=reject
+    tells the landlord the renter is passing; it does not book.
+    """
     sid = _ensure_session(payload)
     lid = _resolve_listing_id(payload, sid)
-    slot = payload.get("slot", "")
+    slot = _as_text(payload.get("slot"))
+    decision = _book_decision(payload)
     lst = L.by_id(lid)
     where = lst.address.split(",")[0] if lst else "it"
+    if not lid:
+        return {"speak": "Which listing was that?", "session_id": sid}
+
+    if not slot:
+        s = store.get(sid)
+        card = next((st for st in (s.listings if s else []) if st.listing_id == lid), None)
+        if card and card.outcome and card.outcome.viewing_slot:
+            slot = card.outcome.viewing_slot
+
+    if decision == "reject":
+        spoken = f"I'll text the listing agent that we're passing on {where}."
+
+        def write_pass(s):
+            s.agent_says = spoken
+
+        await store.mutate(sid, write_pass)
+        when = f", {slot}" if slot else ""
+        landlord = await calls.sms_landlord(
+            sid, lid, f"The renter is not proceeding with {where}{when}.")
+        return {"speak": spoken, "session_id": sid, "decision": "reject",
+                "landlord_sms": landlord}
+
     spoken = f"Booked - {where}, {slot}. Confirmation is on its way by text."
 
     def write(s):
@@ -516,7 +550,10 @@ async def agent_book(payload: dict):
 
     await store.mutate(sid, write)
     await calls.sms(sid, f"Confirmed: {where}, {slot}. {WEB_URL}/s/{sid}")
-    return {"speak": spoken, "session_id": sid}
+    landlord = await calls.sms_landlord(
+        sid, lid, f"Confirmed viewing: {where}, {slot}. The renter is coming.")
+    return {"speak": spoken, "session_id": sid, "decision": "confirm",
+            "landlord_sms": landlord}
 
 
 @app.post("/agent/sms")
