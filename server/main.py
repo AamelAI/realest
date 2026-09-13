@@ -13,15 +13,20 @@ import logging
 import os
 import secrets
 
+from pathlib import Path
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 import admin as monitor
 import calls
 import listings as L
 import state as store
 from schemas import CallOutcome, CallStatus, ListingState, Preferences
+
+_STATIC = Path(__file__).resolve().parent / "static"
 
 log = logging.getLogger("realest.main")
 
@@ -77,6 +82,13 @@ def _cards(session) -> list[dict]:
         card.update(st.model_dump(mode="json"))
         out.append(card)
     return out
+
+
+@app.get("/admin")
+@app.get("/admin/")
+async def admin_page():
+    """Browser UI for the live/history monitor (same origin as /admin/* APIs)."""
+    return FileResponse(_STATIC / "admin.html")
 
 
 @app.get("/admin/live")
