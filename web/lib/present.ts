@@ -178,7 +178,7 @@ export function phaseOf(s: SessionState): Phase {
 }
 
 /** Statuses that mean a human actually told us something. */
-export const CONFIRMED: CallStatus[] = ["verified", "booked", "dead"];
+const CONFIRMED: CallStatus[] = ["verified", "booked", "dead"];
 
 // Sentence case, and nothing the page can't back up — no "just now".
 export const HEADER_STATUS: Record<Phase, string> = {

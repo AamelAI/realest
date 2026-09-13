@@ -3,28 +3,6 @@
 import type { Card } from "@/lib/types";
 
 /**
- * The agent's latest line, captioned. On a muted screen or a glance mid-call,
- * this is what makes the voice and the page read as one conversation. It is a
- * rendering of something the renter also heard — never a summary the page
- * wrote for itself.
- */
-export function Caption({ says }: { says: string }) {
-  if (!says) return null;
-  return (
-    <div className="mx-auto max-w-[820px] px-4 pt-3" aria-live="polite">
-      <p
-        key={says}
-        className="r-in line-clamp-2 text-fact text-ink"
-        style={{ animationDelay: "calc(var(--intro-on, 0) * 220ms)" }}
-      >
-        <span className="text-ink-3">Realest: </span>
-        {says}
-      </p>
-    </div>
-  );
-}
-
-/**
  * Nobody picked up, so the agent drafted an email. Drafts only: the page never
  * claims to have sent anything. The whole draft is visible, paragraph breaks
  * intact — nothing written in the renter's name is hidden behind a tap.

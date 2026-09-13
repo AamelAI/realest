@@ -48,7 +48,7 @@ export function VerifyPrompt({
         Want me to call and check they&rsquo;re real?
       </h2>
       <p className="mt-1 text-support text-ink-2">
-        {count} chosen · tap a listing to change
+        {count} chosen · tap a circle to change
       </p>
 
       <p className="mt-4 text-support text-ink-2">I&rsquo;ll ask about</p>

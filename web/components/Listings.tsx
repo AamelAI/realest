@@ -11,7 +11,10 @@ import type { Card } from "@/lib/types";
  * same place on every card, so the eye can rule a listing out without reading
  * it — and a fixed pitch is what lets the reorder stay a pure transform.
  */
-const CARD = 204;
+// Sized for the tallest real content: a two-line address beside the photo, a
+// corrected price (the animated figure renders taller than its line height, so
+// its digits can roll), and the facts line. Rows never shrink to fit.
+const CARD = 224;
 const GAP = 10;
 const SLOT = CARD + GAP;
 
@@ -34,6 +37,7 @@ export function Listings({
   starting = [],
   elapsed = {},
   maxRent,
+  onOpen,
 }: {
   cards: Card[];
   /** the prompt is open, so cards are tappable to choose who to call */
@@ -45,6 +49,8 @@ export function Listings({
   /** seconds on the phone, per listing */
   elapsed?: Record<string, number>;
   maxRent?: number | null;
+  /** tap a card: open its details, growing out of where it sits */
+  onOpen: (id: string, rect: DOMRect) => void;
 }) {
   const rank = new Map(cards.map((c, i) => [c.listing_id, i]));
   const order = cards.map((c) => c.listing_id).join(",");
@@ -93,6 +99,7 @@ export function Listings({
             starting={starting.includes(card.listing_id)}
             seconds={elapsed[card.listing_id]}
             maxRent={maxRent}
+            onOpen={onOpen}
           />
         );
       })}
@@ -101,7 +108,7 @@ export function Listings({
 }
 
 function Row({
-  card, rank, z, selecting, selected, onToggle, starting, seconds, maxRent,
+  card, rank, z, selecting, selected, onToggle, starting, seconds, maxRent, onOpen,
 }: {
   card: Card;
   rank: number;
@@ -112,6 +119,7 @@ function Row({
   starting: boolean;
   seconds?: number;
   maxRent?: number | null;
+  onOpen: (id: string, rect: DOMRect) => void;
 }) {
   const id = card.listing_id;
   const lead = rank === 0;
@@ -138,7 +146,8 @@ function Row({
       }}
     >
       <div
-        className="r-rise relative h-full rounded-card border bg-surface transition-shadow duration-150"
+        data-card
+        className="r-rise relative h-full rounded-card border bg-surface"
         style={{
           borderColor: "var(--color-line)",
           boxShadow,
@@ -146,24 +155,43 @@ function Row({
           animationDelay: `calc(var(--intro-on, 0) * 260ms + ${Math.min(rank, 6) * 70}ms)`,
         }}
       >
-        {/* The whole card is the target while choosing. A real button sits over
-            the content, so there is exactly one interactive thing per card and
-            the visible text stays readable to assistive tech as its label. */}
+        {/* Tapping the card opens it. A real button covers the content, so the
+            card has one obvious action and its visible text labels it. */}
+        <button
+          type="button"
+          data-open
+          aria-haspopup="dialog"
+          aria-labelledby={`addr-${id}`}
+          aria-describedby={`status-${id}`}
+          onClick={(e) => onOpen(id, e.currentTarget.parentElement!.getBoundingClientRect())}
+          onPointerMove={(e) => {
+            // Where the glass sheen sits: follows the pointer across the card.
+            const el = e.currentTarget.parentElement!;
+            const r = el.getBoundingClientRect();
+            el.style.setProperty("--mx", `${e.clientX - r.left}px`);
+            el.style.setProperty("--my", `${e.clientY - r.top}px`);
+          }}
+          className="absolute inset-0 z-[1] cursor-pointer rounded-card [touch-action:manipulation]"
+        />
+
+        {/* Choosing who to call is the circle — its own control, with a 44px
+            target around the 24px mark. */}
         {selecting && (
           <button
             type="button"
             role="checkbox"
             aria-checked={selected}
-            aria-labelledby={`addr-${id}`}
-            aria-describedby={`status-${id}`}
+            aria-label={`Call the agent for ${card.address}`}
             onClick={() => onToggle(id)}
-            className="absolute inset-0 z-[1] rounded-card [touch-action:manipulation]"
-          />
+            className="absolute right-1 top-1.5 z-[2] flex h-11 w-11 cursor-pointer items-center justify-center rounded-full [touch-action:manipulation]"
+          >
+            <Check on={selected} />
+          </button>
         )}
 
         <div className="pointer-events-none relative flex h-full flex-col overflow-hidden p-3.5">
           {/* the claim: where, and what the listing says it is */}
-          <div className="flex gap-3">
+          <div className="flex shrink-0 gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={card.photo_url}
@@ -184,7 +212,7 @@ function Row({
                 >
                   {card.address}
                 </h3>
-                {selecting && <Check on={selected} />}
+                {selecting && <span aria-hidden className="h-6 w-6 shrink-0" />}
               </div>
               <p className="mt-0.5 truncate text-support text-ink-2">
                 <span className="tnum text-ink-3">#{rank + 1}</span>
@@ -195,7 +223,7 @@ function Row({
           </div>
 
           {/* the money, and where it stands */}
-          <div className="mt-4 flex items-end justify-between gap-3">
+          <div className="mt-4 flex shrink-0 items-end justify-between gap-3">
             <Money card={card} lead={lead} maxRent={maxRent} />
 
             <div id={`status-${id}`} className="min-w-0 max-w-[52%] shrink text-right">
@@ -222,7 +250,7 @@ function Row({
           </div>
 
           {/* what a human said, in ink; what the listing claims, in grey */}
-          <p className="mt-auto truncate pt-2 text-support">
+          <p className="mt-auto shrink-0 truncate pt-2 text-support">
             {facts.length ? (
               facts.map((f, i) => (
                 <span key={i}>
@@ -258,7 +286,7 @@ function Check({ on }: { on: boolean }) {
   return (
     <span
       aria-hidden
-      className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150"
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150"
       style={{
         borderColor: on ? "var(--color-ink)" : "var(--color-line)",
         background: on ? "var(--color-ink)" : "var(--color-surface)",
