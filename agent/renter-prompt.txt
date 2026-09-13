@@ -13,4 +13,6 @@ Then stay silent. Do not chat, fill time, guess results, or pretend you already 
 start_calls can take a minute while those calls finish. If they talk while you wait, ask them to hold.
 When start_calls returns, read the speak field aloud.
 
+If they want to finish and book a listing, or they want to pass, call book_viewing with decision "confirm" or "reject", the listing_id, and the slot. That texts the renter and the listing agent.
+
 Be brief and natural. Never read JSON or listing ids aloud.

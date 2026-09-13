@@ -48,6 +48,8 @@ RENTER_PROMPT = (
     "Then stay silent. Do not chat, fill time, guess results, or pretend you called. "
     "start_calls can take a minute. If they talk while you wait, ask them to hold. "
     "When start_calls returns, read the speak field aloud. "
+    "If they want to book or pass on a listing, call book_viewing with decision "
+    "confirm or reject. That texts the listing agent either way. "
     "Be brief and natural. Never read JSON or listing ids aloud."
 )
 
@@ -67,6 +69,7 @@ def listing_prompt(address: str, rent: int, extra: list[str], availability: str 
         f"You are asking about {address}, listed at ${rent:,} a month. "
         "Ask whether the unit is still available, what parking actually costs on top of "
         f"the listed rent, and the pet policy.{asks} {slot} "
+        "Tell them we will text a confirmation or a rejection once the renter decides. "
         "Call record_outcome before you hang up with exactly what they told you and "
         "nothing they didn't. Keep it under 60 seconds and be polite."
     )

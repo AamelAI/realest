@@ -11,7 +11,7 @@ Renter agent only. Paste these into **Add webhook tool**.
 ## Description
 
 ```
-Call this only when the caller confirms a specific viewing time on a specific listing. After it returns, read the "speak" field aloud.
+Call this when the caller confirms or rejects a viewing on a specific listing. decision is confirm or reject. That texts the listing agent a confirmation or a rejection. After it returns, read the speak field aloud.
 ```
 
 ## Body
@@ -21,7 +21,7 @@ Type: **JSON**
 **JSON description:**
 
 ```
-The listing and time the caller just confirmed.
+The listing, time, and whether the renter is confirming or passing.
 ```
 
 ### Properties
@@ -52,9 +52,20 @@ Real listing id from the shortlist, e.g. L061.
 
 - **Data type:** string
 - **Identifier:** `slot`
-- **Required:** yes
+- **Required:** no
 - **Value Type:** LLM Prompt
 
 ```
 The agreed time as they said it, e.g. Saturday 2:00pm.
+```
+
+#### decision
+
+- **Data type:** string
+- **Identifier:** `decision`
+- **Required:** no
+- **Value Type:** LLM Prompt
+
+```
+confirm to book and text the landlord a confirmation. reject to text them that the renter is passing. Default confirm.
 ```

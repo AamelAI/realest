@@ -18,6 +18,7 @@ def test_listing_prompt_syncs_renter_times() -> None:
     text = listing_prompt("155 Yorkville Ave", 2690, [], "Saturday morning")
     assert "Saturday morning" in text
     assert "landlord" in text.lower()
+    assert "confirmation" in text.lower() or "rejection" in text.lower()
 
 
 def test_listing_prompt_empty_availability_asks_for_a_slot() -> None:

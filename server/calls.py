@@ -561,6 +561,15 @@ def _sms_remember(to: str, body: str) -> None:
     _recent_sms[(to, body)] = time.monotonic()
 
 
+async def sms_landlord(session_id: str, listing_id: str, body: str) -> bool:
+    """Text the listing-agent / landlord number for this listing. Never the renter."""
+    dest = destination(session_id, L.by_id(listing_id))
+    if not dest:
+        log.info("sms_landlord[%s/%s]: no dest — skip", session_id, listing_id)
+        return False
+    return await sms(session_id, body, to=dest)
+
+
 async def sms(session_id: str, body: str, to: str | None = None) -> bool:
     """One line. Long messages split into segments and arrive out of order.
 
@@ -568,6 +577,7 @@ async def sms(session_id: str, body: str, to: str | None = None) -> bool:
     window, retries once on a transient Twilio error, and never raises - a
     failed text must never take down the call flow around it."""
     session = store.get(session_id)
+    stamp_caller = not (to and str(to).strip())
     if to is None or not str(to).strip():
         to = as_e164(session.caller_phone if session else "")
     else:
@@ -575,7 +585,7 @@ async def sms(session_id: str, body: str, to: str | None = None) -> bool:
     if not to:
         log.warning("sms[%s]: no valid E.164 destination - not sending", session_id)
         return False
-    if session and not session.caller_phone:
+    if stamp_caller and session and not session.caller_phone:
         await store.mutate(session_id, lambda s: setattr(s, "caller_phone", to) if not s.caller_phone else None)
 
     if _sms_already_sent(to, body):

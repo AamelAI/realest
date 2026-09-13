@@ -55,6 +55,7 @@ def reset_sms_module_state() -> None:
     calls._ended.clear()
     calls._link_sms_started.clear()
     calls._recent_sms.clear()
+    calls._listing_dest.clear()
     calls.SMS_LINK_DELAY_S = 5
     try:
         import main
@@ -166,10 +167,38 @@ async def _run() -> None:
     s = store.get(sid)
     await new_session(sid)  # (re)attach a caller_phone after preferences overwrote nothing here
     lid = s.listings[0].listing_id
+    calls._listing_dest[(sid, lid)] = "+14165550101"
     await main.agent_book({"session_id": sid, "listing_id": lid, "slot": "Saturday 2pm"})
     await main.agent_book({"session_id": sid, "listing_id": lid, "slot": "Saturday 2pm"})
-    check("only one confirmation actually sent", fake.messages.calls == 1,
+    tos = [m["to"] for m in fake.messages.sent]
+    check("renter confirmation sent", "+14165551234" in tos)
+    check("landlord confirmation sent", "+14165550101" in tos)
+    check("duplicate book does not double-text", fake.messages.calls == 2,
           f"calls={fake.messages.calls}")
+    check("caller_phone still the renter", store.get(sid).caller_phone == "+14165551234")
+
+    print("\nbooking reject: texts the landlord, does not book")
+    reset_sms_module_state()
+    fake = use_fake_twilio()
+    sid2 = "s-booking-reject"
+    await main.agent_preferences({"session_id": sid2, "beds": 2, "max_rent": 4000})
+    s2 = store.get(sid2)
+    await new_session(sid2)
+    lid2 = s2.listings[0].listing_id
+    calls._listing_dest[(sid2, lid2)] = "+14165550102"
+    r = await main.agent_book({
+        "session_id": sid2, "listing_id": lid2, "slot": "Sunday 1pm",
+        "decision": "reject",
+    })
+    card = next(st for st in store.get(sid2).listings if st.listing_id == lid2)
+    check("reject does not book", card.status.value != "booked")
+    check("landlord got a pass text", any(
+        m["to"] == "+14165550102" and "not proceeding" in m["body"]
+        for m in fake.messages.sent))
+    check("renter was not sent a booked confirm", not any(
+        m["to"] == "+14165551234" and m["body"].startswith("Confirmed:")
+        for m in fake.messages.sent))
+    check("decision reject in response", r.get("decision") == "reject")
 
     calls.SMS_LINK_DELAY_S = 5  # restore the real constant for anything after this module
 
